@@ -36,6 +36,7 @@ import {
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
+import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
@@ -437,15 +438,25 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       // champs de la formule ; les quatre autres sont relus pour la recomposer.
       const current = await fastify.prisma.user.findUnique({
         where: { id: userId },
-        select: { displayName: true, bio: true, phoneNumber: true, email: true },
+        select: { displayName: true, bio: true, phoneNumber: true, email: true, avatar: true },
       });
+
+      if (!(await identityImageIsCallers(fastify.prisma, { userId: userId!, reference: body.avatar, current: current?.avatar }))) {
+        return sendBadRequest(reply, 'Invalid image format', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
 
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: {
           avatar: body.avatar,
           ...(current && {
-            profileCompletionRate: calculateProfileCompletionRate({ ...current, avatar: body.avatar }),
+            profileCompletionRate: calculateProfileCompletionRate({
+              displayName: current.displayName,
+              bio: current.bio,
+              phoneNumber: current.phoneNumber,
+              email: current.email,
+              avatar: body.avatar,
+            }),
           }),
         },
       });
@@ -538,6 +549,11 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       fastify.log.info(`[BANNER_UPDATE] User ${userId} updating banner`);
 
       const body = updateBannerSchema.parse(request.body);
+
+      const current = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { banner: true } });
+      if (!(await identityImageIsCallers(fastify.prisma, { userId: userId!, reference: body.banner, current: current?.banner }))) {
+        return sendBadRequest(reply, 'Invalid image format', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
 
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
