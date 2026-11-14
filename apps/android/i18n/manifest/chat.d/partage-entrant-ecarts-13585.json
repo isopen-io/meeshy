@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "share.sheet.content.refused-source",
-          "androidName": "share_content_refused_source",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "share.sheet.content.unprepared",
           "androidName": "share_content_unprepared",
           "status": "adopted"

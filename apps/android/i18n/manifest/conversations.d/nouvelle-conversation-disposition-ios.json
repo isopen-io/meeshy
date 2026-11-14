@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.new.group.solo-hint",
-          "androidName": "new_conversation_group_solo_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "accessibility.section_expanded",
           "androidName": "new_conversation_encryption_expanded",
           "status": "adopted"

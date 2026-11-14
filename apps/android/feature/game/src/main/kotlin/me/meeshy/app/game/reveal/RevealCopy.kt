@@ -36,13 +36,17 @@ internal object RevealCopy {
         is RevealTitle.Level -> res.getString(R.string.progression_level, title.rank)
     }
 
-    fun subtitle(res: Resources, subtitle: RevealSubtitle): String = when (subtitle) {
-        is RevealSubtitle.LegacyCondition -> res.getString(legacyCondition(subtitle.key))
+    /** La ligne sous le titre, ou `null` quand le titre dit tout (un niveau : sa bannière et « Niveau N » suffisent). */
+    fun subtitle(res: Resources, subtitle: RevealSubtitle): String? = when (subtitle) {
+        is RevealSubtitle.LegacyCondition -> condition(res, subtitle.key)
         is RevealSubtitle.Composed -> res.getString(R.string.reveal_composed_subtitle, sectionTitle(res, subtitle.section))
         RevealSubtitle.BadgeAxis -> res.getString(R.string.reveal_badge_axis_subtitle)
         is RevealSubtitle.Streak -> res.getString(R.string.reveal_streak_subtitle, subtitle.days)
-        RevealSubtitle.Level -> res.getString(R.string.reveal_level_subtitle)
+        RevealSubtitle.Level -> null
     }
+
+    /** La condition d'un succès historique (« Un premier message ou commentaire vocal »). */
+    fun condition(res: Resources, key: EngagementAchievementKey): String = res.getString(legacyCondition(key))
 
     fun banner(res: Resources, locale: Locale, banner: RevealBanner): String = when (banner) {
         RevealBanner.Achievement -> res.getString(R.string.reveal_badge_achievement)
@@ -61,7 +65,8 @@ internal object RevealCopy {
      * toutes lettres quand elle se montre — la couleur du liseré n'est jamais la seule information.
      */
     fun spoken(res: Resources, locale: Locale, plan: EngagementRevealPlan, rarity: RevealRim.Line? = null): String {
-        val base = "${banner(res, locale, plan.banner)}. ${title(res, locale, plan.title)}. ${subtitle(res, plan.subtitle)}"
+        val base = listOfNotNull(banner(res, locale, plan.banner), title(res, locale, plan.title), subtitle(res, plan.subtitle))
+            .joinToString(". ")
         val named = (rarity as? RevealRim.Line.Measured)?.let { "$base. ${rarityName(res, it.rarity)}" }
         return named ?: base
     }

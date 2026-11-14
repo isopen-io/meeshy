@@ -144,12 +144,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "media_hub.all_loaded",
-          "androidName": "media_hub_all_loaded",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "common.clear-search",
           "androidName": "common_clear_search",
           "status": "adopted"

@@ -148,21 +148,23 @@ private fun CurrentContentCard(current: StoryCurrentContent) {
 }
 
 @Composable
-private fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
+internal fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
     val label = stringResource(R.string.story_language_original)
     val accent = if (selected) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textMuted
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(if (selected) accent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) { this.selected = selected; role = Role.Button; contentDescription = label }
+            .semantics(mergeDescendants = true) { this.selected = selected; role = Role.Button }
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(imageVector = MeeshyIcons.Quote, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = if (selected) accent else MeeshyTheme.tokens.textPrimary, modifier = Modifier.weight(1f))
-        Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = if (selected) accent else MeeshyTheme.tokens.textPrimary)
+            Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
+        }
         if (selected) Icon(imageVector = MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
     }
 }

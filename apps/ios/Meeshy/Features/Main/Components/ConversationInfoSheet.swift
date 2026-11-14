@@ -142,7 +142,7 @@ struct ConversationInfoSheet: View {
                 blockOtherUser()
             }
         } message: {
-            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le débloquer dans les réglages.", bundle: .main), conversation.name))
+            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Plus aucun message de %@ ; débloquable dans les réglages.", bundle: .main), conversation.name))
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -155,7 +155,7 @@ struct ConversationInfoSheet: View {
                 Task { await leaveConversation() }
             }
         } message: {
-            Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
+            Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .main))
         }
         .sheet(isPresented: $showSecurityVerification) {
             SecurityVerificationView(

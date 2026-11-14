@@ -1,4 +1,5 @@
-import Foundation
+import SwiftUI
+import MeeshyUI
 
 /// **Ce qu'un échec d'ouverture DIT — une seule table pour les trois surfaces (#6508).**
 ///
@@ -28,12 +29,15 @@ extension ContentFetchFailure {
         }
     }
 
-    var message: String {
+    /// Un échec de SERVEUR tient dans son titre et son bouton « Réessayer » (règle 4 de l'épure, #18109) ;
+    /// celui du RÉSEAU dit en une phrase ce que l'utilisateur peut vérifier, sans quoi rien ne le distinguerait
+    /// d'une panne de Meeshy (#6508) ; une ABSENCE dit pourquoi le contenu manque.
+    var message: String? {
         switch self {
         case .network:
-            return String(localized: "feed.post.detail.loadFailed.body", defaultValue: "Vérifiez votre connexion, puis réessayez.", bundle: .main)
+            return String(localized: "feed.post.detail.loadFailed.body", defaultValue: "Vérifiez votre connexion.", bundle: .main)
         case .server:
-            return String(localized: "feed.post.detail.serverFailed.body", defaultValue: "Le problème vient de notre côté. Réessayez dans un instant.", bundle: .main)
+            return nil
         case .forbidden, .notFound:
             return String(localized: "feed.post.detail.unavailable.body", defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main)
         }
@@ -41,4 +45,20 @@ extension ContentFetchFailure {
 
     /// Réessayer n'est proposé que là où réessayer peut aboutir.
     var offersRetry: Bool { !isAbsence }
+}
+
+/// La phrase d'une absence, rendue seulement s'il y en a une : un échec de réseau ou de serveur n'écrit
+/// rien sous son titre (#18109), les trois surfaces partagent ce rendu.
+struct ContentFetchFailureMessage: View {
+    let message: String?
+    let tint: Color
+
+    var body: some View {
+        if let message {
+            Text(message)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                .foregroundStyle(tint)
+                .multilineTextAlignment(.center)
+        }
+    }
 }

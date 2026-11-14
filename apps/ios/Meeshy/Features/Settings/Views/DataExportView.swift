@@ -128,7 +128,7 @@ struct DataExportView: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: MeeshyColors.communityAccent)
+            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "Inclure", bundle: .main), icon: "checklist", color: MeeshyColors.communityAccent)
 
             VStack(spacing: 0) {
                 toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.error, isOn: $includeMessages)

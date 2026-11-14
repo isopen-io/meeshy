@@ -41,9 +41,8 @@ struct PrivacySettingsView: View {
     private var pageContent: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             visibilitySection
-            contactsSection
             locationSection
-            mediaSection
+            dataSection
             callsSection
             encryptionSection
 
@@ -94,7 +93,8 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "lastSeen", icon: "clock.fill",
                     title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main),
-                    color: MeeshyColors.infoHex, keyPath: \.showLastSeen
+                    color: MeeshyColors.infoHex, keyPath: \.showLastSeen,
+                    summary: String(localized: "settings.privacy.last_seen.summary", defaultValue: "Vos proches voient quand vous étiez actif, vos amis si vous êtes en ligne.", bundle: .main)
                 ),
                 ToggleSpec(
                     id: "readReceipts", icon: "checkmark.message.fill",
@@ -111,33 +111,8 @@ struct PrivacySettingsView: View {
                     id: "hideSearch", icon: "magnifyingglass",
                     title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Masquer mon numéro et mon e-mail", bundle: .main),
                     color: MeeshyColors.tileCoralHex, keyPath: \.hideProfileFromSearch,
+                    summary: String(localized: "settings.privacy.hide_from_contact_search.summary", defaultValue: "Votre profil ne ressort plus d'une recherche par numéro ou e-mail.", bundle: .main),
                     note: SettingsInfoNotes.contactSearch
-                ),
-            ]
-        )
-    }
-
-    private var contactsSection: some View {
-        section(
-            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts et groupes", bundle: .main),
-            icon: "person.2.fill",
-            color: MeeshyColors.brandPrimaryHex,
-            specs: [
-                ToggleSpec(
-                    id: "contactRequests", icon: "person.badge.plus",
-                    title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main),
-                    color: MeeshyColors.brandPrimaryHex, keyPath: \.allowContactRequests
-                ),
-                ToggleSpec(
-                    id: "groupInvites", icon: "person.3.fill",
-                    title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main),
-                    color: MeeshyColors.infoHex, keyPath: \.allowGroupInvites
-                ),
-                ToggleSpec(
-                    id: "callsNonContacts", icon: "phone.arrow.down.left",
-                    title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                    color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
-                    note: SettingsInfoNotes.callsFromNonContacts
                 ),
             ]
         )
@@ -146,39 +121,21 @@ struct PrivacySettingsView: View {
     /// Les réglages de partage de position — la MÊME vue que celle qu'ouvre le
     /// `(i)` du sélecteur de lieu. Une seule source, deux surfaces : ce sont
     /// des préférences applicatives, pas propres à une conversation.
-    ///
-    /// Contrairement aux autres sections de cet écran, celle-ci est pleinement
-    /// fonctionnelle — pas de « Bientôt disponible ».
     private var locationSection: some View {
         LocationSharingSettingsSection(accentColor: accentColor)
     }
 
-    private var mediaSection: some View {
+    private var dataSection: some View {
         section(
-            title: String(localized: "settings.privacy.media_data", defaultValue: "Média & Données", bundle: .main),
-            icon: "photo.fill",
+            title: String(localized: "settings.privacy.data", defaultValue: "Données", bundle: .main),
+            icon: "chart.pie.fill",
             color: MeeshyColors.tileSaffronHex,
             specs: [
-                ToggleSpec(
-                    id: "saveMedia", icon: "square.and.arrow.down.fill",
-                    title: String(localized: "settings.privacy.save_media", defaultValue: "Sauvegarder média", bundle: .main),
-                    color: "4ADE80", keyPath: \.saveMediaToGallery
-                ),
                 ToggleSpec(
                     id: "analytics", icon: "chart.bar.fill",
                     title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
                     color: MeeshyColors.infoHex, keyPath: \.allowAnalytics,
                     note: SettingsInfoNotes.analytics
-                ),
-                ToggleSpec(
-                    id: "shareData", icon: "arrow.triangle.branch",
-                    title: String(localized: "settings.privacy.share_data", defaultValue: "Partage données", bundle: .main),
-                    color: MeeshyColors.tileAmethystHex, keyPath: \.shareUsageData
-                ),
-                ToggleSpec(
-                    id: "blockScreenshots", icon: "camera.fill",
-                    title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer les captures", bundle: .main),
-                    color: MeeshyColors.tileCoralHex, keyPath: \.blockScreenshots
                 ),
             ]
         )
@@ -186,14 +143,22 @@ struct PrivacySettingsView: View {
 
     // MARK: - Appels (#11296)
 
-    /// « Masquer mon adresse IP » force le relais TURN sur toutes les connexions
-    /// d'appel : le correspondant ne voit que l'adresse du relais Meeshy.
+    /// Qui peut m'appeler, et ce que voit le correspondant. « Masquer mon adresse
+    /// IP » force le relais TURN sur toutes les connexions d'appel : le
+    /// correspondant ne voit que l'adresse du relais Meeshy.
     private var callsSection: some View {
         let titre = String(localized: "settings.privacy.calls.hide_ip", defaultValue: "Masquer mon adresse IP", bundle: .main)
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             SettingsSectionHeader(title: String(localized: "settings.privacy.calls", defaultValue: "Appels", bundle: .main),
                                   icon: "phone.fill", color: MeeshyColors.tileBlueHex)
             SettingsCard(tint: MeeshyColors.tileBlueHex) {
+                privacyToggle(ToggleSpec(
+                    id: "callsNonContacts", icon: "phone.arrow.down.left",
+                    title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
+                    color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
+                    note: SettingsInfoNotes.callsFromNonContacts
+                ))
+                SettingsSeparator(tint: MeeshyColors.tileBlueHex)
                 SettingsRow(
                     icon: "eye.slash.fill", title: titre, color: MeeshyColors.tileBlueHex,
                     note: SettingsInfoNotes.hiddenCallAddress,
@@ -259,64 +224,22 @@ struct PrivacySettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func privacyToggle(_ spec: ToggleSpec) -> some View {
-        if Self.isComingSoon(spec.keyPath) {
-            SettingsRow(icon: spec.icon, title: spec.title, color: spec.color) {
-                Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .opacity(0.55)
-            .allowsHitTesting(false)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(spec.title) — \(String(localized: "settings.privacy.coming_soon.a11y", defaultValue: "bientôt disponible, actuellement sans effet", bundle: .main))")
-        } else {
-            SettingsRow(
-                icon: spec.icon,
-                title: spec.title,
-                subtitle: spec.summary,
-                color: spec.color,
-                note: spec.note,
-                openNoteID: $openNoteID
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.privacy[keyPath: spec.keyPath] },
-                    set: { val in prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val } }
-                ))
-                .labelsHidden()
-                .tint(Color(hex: accentColor))
-                .accessibilityLabel(spec.title)
-            }
+        SettingsRow(
+            icon: spec.icon,
+            title: spec.title,
+            subtitle: spec.summary,
+            color: spec.color,
+            note: spec.note,
+            openNoteID: $openNoteID
+        ) {
+            Toggle("", isOn: Binding(
+                get: { prefs.privacy[keyPath: spec.keyPath] },
+                set: { val in prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val } }
+            ))
+            .labelsHidden()
+            .tint(Color(hex: accentColor))
+            .accessibilityLabel(spec.title)
         }
     }
-
-    /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
-    /// côté gateway (`blockScreenshots` n'a pas d'API publique iOS pour
-    /// réellement bloquer une capture ;
-    /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
-    /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
-    /// gateway avant la création d'une demande de contact
-    /// (`routes/friends.ts`) ou l'ajout d'un membre à un groupe
-    /// (`routes/conversations/participants.ts`) — `PrivacyPreferencesService`
-    /// ne les expose aujourd'hui qu'à `PresenceVisibilityService`/l'accusé de
-    /// lecture, jamais à ces deux flux).
-    /// Grisées avec "Bientôt disponible" plutôt que persistées sans effet
-    /// (faux sentiment de confidentialité) — cf.
-    /// tasks/audit-backlog-2026-07-20.md LANE Réglages, item P1. Retirer un
-    /// cas dès qu'une application réelle existe pour ce champ.
-    /// `nonisolated`: pure Set membership check, no actor-isolated state.
-    nonisolated static func isComingSoon(_ keyPath: WritableKeyPath<PrivacyPreferences, Bool>) -> Bool {
-        Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
-    }
-
-    private nonisolated static var comingSoonPrivacyKeyPaths: Set<AnyKeyPath> {
-        [
-            \PrivacyPreferences.blockScreenshots,
-            \PrivacyPreferences.shareUsageData,
-            \PrivacyPreferences.allowContactRequests,
-            \PrivacyPreferences.allowGroupInvites,
-        ]
-    }
-
 }

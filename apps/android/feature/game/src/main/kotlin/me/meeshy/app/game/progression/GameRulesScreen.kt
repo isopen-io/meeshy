@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,8 @@ import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
 import me.meeshy.sdk.model.game.rules.GameRulesFocus
 import kotlinx.coroutines.delay
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
 import me.meeshy.ui.component.game.GameMedalView
@@ -134,6 +137,7 @@ fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null, focus
 @Composable
 internal fun RulesBadgesSection() {
     val tokens = MeeshyTheme.tokens
+    var openRibbon by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxWidth().testTag(RULES_BADGES_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Text(
             stringResource(R.string.game_rules_badges_title),
@@ -142,9 +146,18 @@ internal fun RulesBadgesSection() {
             fontWeight = FontWeight.Bold,
             color = tokens.textPrimary,
         )
-        Paragraph(stringResource(R.string.game_rules_badges_ladder), muted = false)
+        MeeshyInfoNoted(
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.game_rules_badges_ribbon_question),
+                text = stringResource(R.string.game_rules_badges_ribbon),
+            ),
+            openNoteId = openRibbon,
+            onOpenNoteIdChange = { openRibbon = it },
+            tint = tokens.textMuted,
+        ) {
+            Paragraph(stringResource(R.string.game_rules_badges_ladder), muted = false)
+        }
         RulesMaterials()
-        Paragraph(stringResource(R.string.game_rules_badges_ribbon), muted = true)
         Paragraph(stringResource(R.string.game_rules_badges_imprint), muted = true)
         Text(
             stringResource(R.string.game_rules_badges_families),

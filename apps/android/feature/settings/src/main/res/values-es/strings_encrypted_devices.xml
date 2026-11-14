@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">Cifrado de extremo a extremo</string>
     <string name="encrypted_devices_title">Mis dispositivos cifrados</string>
     <string name="encrypted_devices_loading">Cargando tus dispositivos cifrados</string>
-    <string name="encrypted_devices_offline_empty">No tienes conexión. Conéctate para ver tus dispositivos cifrados.</string>
+    <string name="encrypted_devices_offline_empty">Sin conexión: tus dispositivos volverán con la red.</string>
     <string name="encrypted_devices_error">No se pudieron cargar tus dispositivos cifrados.</string>
     <string name="encrypted_devices_retry">Reintentar</string>
-    <string name="encrypted_devices_offline">No tienes conexión. Puede que esta lista no esté actualizada.</string>
-    <string name="encrypted_devices_stale">No se pudo actualizar esta lista y puede que no esté al día.</string>
+    <string name="encrypted_devices_offline">Sin conexión: última lista conocida.</string>
+    <string name="encrypted_devices_stale">No se pudo actualizar: última lista conocida.</string>
     <string name="encrypted_devices_current">Este dispositivo</string>
     <string name="encrypted_devices_retiring">Quitando %1$s</string>
     <string name="encrypted_devices_retire_a11y">Quitar %1$s</string>

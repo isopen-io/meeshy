@@ -40,7 +40,7 @@ struct CreateTrackingLinkView: View {
                     .padding(.top, MeeshySpacing.xl).padding(.bottom, 40)
                 }
             }
-            .navigationTitle(String(localized: "tracking.link.create.title", defaultValue: "Nouveau lien de tracking", bundle: .main))
+            .navigationTitle(String(localized: "tracking.link.create.title", defaultValue: "Nouveau lien de suivi", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

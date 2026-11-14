@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">تمت الإضافة إلى المفضلة</string>
+    <string name="feed_notice_bookmark_failed">تعذّر حفظ الإشارة المرجعية</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="zero">لا توجد إعادات نشر</item>
+        <item quantity="one">إعادة نشر واحدة</item>
+        <item quantity="two">إعادتا نشر</item>
+        <item quantity="few">%1$d إعادات نشر</item>
+        <item quantity="many">%1$d إعادة نشر</item>
+        <item quantity="other">%1$d إعادة نشر</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">المس المربع مرة أخرى لعرض كل شيء</string>
+</resources>

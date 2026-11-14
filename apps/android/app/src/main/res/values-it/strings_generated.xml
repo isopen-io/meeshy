@@ -50,7 +50,7 @@
     <string name="connection_syncing">Sincronizzazione</string>
     <string name="conversations_logout">Esci</string>
     <string name="conversations_retry">Riprova</string>
-    <string name="feed_empty">Nessun post</string>
+    <string name="feed_empty">Nessun post dei tuoi contatti</string>
     <string name="feed_like">Metti mi piace</string>
     <string name="feed_title">Feed</string>
     <string name="login_button">Accedi</string>
@@ -68,7 +68,6 @@
     <string name="notifications_title">Notifiche</string>
     <string name="profile_back">Indietro</string>
     <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Annulla</string>
     <string name="profile_display_name_label">Nome visualizzato</string>
     <string name="profile_edit">Modifica</string>
     <string name="profile_edit_title">Modifica profilo</string>
@@ -79,7 +78,7 @@
     <string name="push_action_comment_hint">Commenta…</string>
     <string name="root_pending_changes">Modifiche in sospeso</string>
     <string name="root_sync_on_reconnect">Sincronizzazione al ritorno online</string>
-    <string name="route_title_affiliate">Affiliazione</string>
+    <string name="route_title_affiliate">Referral</string>
     <string name="route_title_bookmarks">Segnalibri</string>
     <string name="route_title_communities">Community</string>
     <string name="route_title_community">Community</string>

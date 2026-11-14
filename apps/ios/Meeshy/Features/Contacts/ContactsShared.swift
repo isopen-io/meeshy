@@ -89,7 +89,7 @@ enum ContactFilter: String, CaseIterable {
         case .phonebook:
             return String(localized: "contacts.list.filter.phonebook", defaultValue: "Répertoire", bundle: .main)
         case .affiliates:
-            return String(localized: "contacts.list.filter.affiliates", defaultValue: "Affiliés", bundle: .main)
+            return String(localized: "contacts.list.filter.affiliates", defaultValue: "Filleuls", bundle: .main)
         }
     }
 }

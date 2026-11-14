@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">Ajouté aux favoris</string>
+    <string name="feed_notice_bookmark_failed">Impossible d\'enregistrer le favori</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d repartage</item>
+        <item quantity="many">%1$d repartages</item>
+        <item quantity="other">%1$d repartages</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">Touchez à nouveau la tuile pour tout revoir</string>
+</resources>

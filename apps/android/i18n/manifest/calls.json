@@ -169,10 +169,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "call_history_empty",
-          "status": "android-only"
-        },
-        {
           "catalog": "ui",
           "iosKey": "notifications.empty.calls",
           "androidName": "call_history_empty_missed",

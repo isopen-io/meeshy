@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="talkie_info_a11y">When to use the walkie-talkie?</string>
+    <string name="talkie_send_e2ee">Not available in an encrypted conversation.</string>
+    <string name="voiceProfile_age_birthDate">Date of birth</string>
+    <string name="voiceProfile_age_description">Voice cloning is reserved for people aged 18 and over.</string>
+    <string name="voiceProfile_age_title">Age verification</string>
+    <string name="voiceProfile_age_tooYoungError">You must be 18 or older to use voice cloning.</string>
+    <string name="voiceProfile_age_verify">Verify</string>
+    <string name="voiceProfile_complete_description">Your audio translations will now use your cloned voice.</string>
+    <string name="voiceProfile_complete_finish">Finish</string>
+    <string name="voiceProfile_complete_title">Voice profile created!</string>
+    <string name="voiceProfile_consent_continue">Continue</string>
+    <string name="voiceProfile_consent_description">Meeshy can clone your voice to translate your audio messages in other languages with your own voice.</string>
+    <string name="voiceProfile_consent_point1">Record a few samples of your voice</string>
+    <string name="voiceProfile_consent_point2">A unique voice model is created from your samples</string>
+    <string name="voiceProfile_consent_point3">Your audio translations will use your cloned voice</string>
+    <string name="voiceProfile_consent_point4">You can delete your voice data at any time (GDPR)</string>
+    <string name="voiceProfile_consent_point5">Your samples are encrypted and never shared</string>
+    <string name="voiceProfile_consent_title">Voice cloning</string>
+    <string name="voiceProfile_consent_toggle">I agree that my voice samples will be used to create a voice profile</string>
+    <string name="voiceProfile_processing_title">Creating voice profile...</string>
+    <string name="voiceProfile_recording_title">Record your voice</string>
+    <string name="voiceProfile_wizard_close">Close</string>
+    <string name="voiceProfile_wizard_errorTitle">Error</string>
+    <string name="voiceProfile_wizard_ok">OK</string>
+    <string name="voiceProfile_wizard_title">Voice profile</string>
+    <string name="talkie_send_explain">Hold and talk: your voice plays directly on %1$s’s side, no need to pick up.</string>
+</resources>

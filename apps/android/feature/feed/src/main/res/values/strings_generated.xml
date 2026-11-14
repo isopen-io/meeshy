@@ -13,7 +13,6 @@
     <string name="feed_action_send">Send</string>
     <string name="feed_action_share">Share</string>
     <string name="feed_action_view_profile">View profile</string>
-    <string name="feed_bookmark_success">Added to bookmarks</string>
     <string name="feed_caption_collapse">less</string>
     <string name="feed_caption_expand">more…</string>
     <string name="feed_carousel_a11y_position">Media %1$d of %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">Cancel</string>
     <string name="feed_delete_confirm">Delete</string>
     <string name="feed_draft_recovered">Offline draft restored</string>
-    <string name="feed_empty">No posts yet</string>
-    <string name="feed_empty_subtitle">Posts from your contacts will appear here</string>
+    <string name="feed_empty">No posts from your contacts</string>
     <string name="feed_header_nearby">Nearby posts</string>
     <string name="feed_like">Like</string>
     <string name="feed_link_copied">Link copied</string>
@@ -40,7 +38,6 @@
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">Error saving bookmark</string>
     <string name="feed_notice_delete_failed">Error deleting post</string>
     <string name="feed_notice_like_failed">Error liking post</string>
     <string name="feed_notice_pin_failed">Error pinning post</string>
@@ -78,10 +75,6 @@
         <item quantity="one">%1$d reply</item>
         <item quantity="other">%1$d replies</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="one">%1$d repost</item>
-        <item quantity="other">%1$d reposts</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d saves</string>
     <string name="feed_post_stat_shares">%1$d shares</string>
     <string name="feed_quote_cancel">Cancel</string>
@@ -113,7 +106,7 @@
     <string name="feed_scene_previous">Previous scene</string>
     <string name="feed_scene_resume">Resumes the scene playback</string>
     <string name="feed_scene_sound_mute">Mute the sound</string>
-    <string name="feed_scene_sound_muted">Sound off — open full screen to hear it</string>
+    <string name="feed_scene_sound_muted">Sound off</string>
     <string name="feed_scene_sound_track">Background sound</string>
     <string name="feed_scene_sound_unmute">Turn the sound back on</string>
     <string name="feed_scene_tile">Scene %1$d</string>
@@ -149,8 +142,6 @@
     <string name="mood_spotlight_unavailable">This mood is no longer available</string>
     <string name="nearby_back">Back</string>
     <string name="nearby_denied_action">Open Settings</string>
-    <string name="nearby_denied_detail">Meeshy has no access to your location. Allow it in Settings, or move the map by hand.</string>
-    <string name="nearby_denied_title">Location not allowed</string>
     <string name="nearby_retry">Try again</string>
     <string name="nearby_title">Nearby</string>
     <string name="post_bookmark_removed">Removed from bookmarks</string>
@@ -196,11 +187,8 @@
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Views</string>
     <string name="profile_posts_empty">No posts</string>
-    <string name="profile_posts_empty_filter_subtitle">Tap the tile again to see everything</string>
     <string name="profile_posts_empty_posts">No posts</string>
     <string name="profile_posts_empty_reels">No reels</string>
-    <string name="profile_posts_empty_subtitle">Posts will appear here</string>
-    <string name="profile_posts_end_of_content">You\'ve seen it all</string>
     <string name="profile_posts_first_published_at">First content published on %1$s</string>
     <string name="profile_posts_load_error">Error loading posts</string>
     <string name="profile_posts_stat_posts">Posts</string>
@@ -225,6 +213,6 @@
     <string name="status_queued_offline">Mood awaiting sending</string>
     <string name="status_react_error">Error reacting to status</string>
     <string name="user_posts_back">Back</string>
-    <string name="user_posts_empty">No posts yet</string>
+    <string name="user_posts_empty">No posts</string>
     <string name="user_posts_title">Posts</string>
 </resources>

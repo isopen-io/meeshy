@@ -33,9 +33,9 @@ internal object AtlasCopy {
     fun family(family: AtlasFamily): AtlasFamilyCopy = when (family) {
         AtlasFamily.Tiers -> AtlasFamilyCopy(R.string.game_atlas_tiers_title, R.string.game_atlas_tiers_line)
         AtlasFamily.Coin -> AtlasFamilyCopy(R.string.game_atlas_coin_title)
-        AtlasFamily.Treasury -> AtlasFamilyCopy(R.string.game_atlas_treasury_title, R.string.game_atlas_treasury_line)
+        AtlasFamily.Treasury -> AtlasFamilyCopy(R.string.game_atlas_treasury_title)
         AtlasFamily.Ranks -> AtlasFamilyCopy(R.string.game_atlas_ranks_title)
-        AtlasFamily.Flames -> AtlasFamilyCopy(R.string.game_atlas_flames_title, R.string.game_atlas_flames_line)
+        AtlasFamily.Flames -> AtlasFamilyCopy(R.string.game_atlas_flames_title)
         AtlasFamily.Leagues -> AtlasFamilyCopy(R.string.game_atlas_leagues_title, R.string.game_atlas_leagues_line)
         AtlasFamily.Medals -> AtlasFamilyCopy(R.string.game_atlas_medals_title)
         AtlasFamily.Trophies -> AtlasFamilyCopy(R.string.game_atlas_trophies_title, R.string.game_atlas_trophies_line)

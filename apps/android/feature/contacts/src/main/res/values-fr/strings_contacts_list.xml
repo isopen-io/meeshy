@@ -10,5 +10,4 @@
     <string name="contacts_filter_affiliates">Affiliés</string>
     <string name="contacts_filter_a11y">Filtre : %1$s</string>
     <string name="contacts_search_clear">Effacer la recherche</string>
-    <string name="contacts_list_mood_a11y">Ouvrir le statut de %1$s</string>
 </resources>

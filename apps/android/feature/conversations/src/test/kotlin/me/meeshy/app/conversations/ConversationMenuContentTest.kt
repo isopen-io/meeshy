@@ -82,12 +82,33 @@ class ConversationMenuContentTest {
             ConversationMenuEntry.MUTE,
             ConversationMenuEntry.MARK_UNREAD,
             ConversationMenuEntry.DETAILS,
-            ConversationMenuEntry.FAVORITE,
-            ConversationMenuEntry.MOVE,
             ConversationMenuEntry.LEAVE,
             ConversationMenuEntry.HIDE,
         ).forEach { compose.onNodeWithTag(menuEntryTestTag(it)).assertIsDisplayed() }
         compose.onNodeWithTag(MORE_TEST_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the rare gestures rest behind Plus, and every one of them stays reachable there`() {
+        render()
+        listOf(
+            ConversationMenuEntry.FAVORITE, ConversationMenuEntry.TAGS, ConversationMenuEntry.MOVE,
+            ConversationMenuEntry.MENTIONS_ONLY,
+        ).forEach { compose.onNodeWithTag(menuEntryTestTag(it)).assertDoesNotExist() }
+        compose.onNodeWithTag(MORE_TEST_TAG).performClick()
+        listOf(
+            ConversationMenuEntry.FAVORITE, ConversationMenuEntry.TAGS, ConversationMenuEntry.MOVE,
+            ConversationMenuEntry.MENTIONS_ONLY,
+        ).forEach { compose.onNodeWithTag(menuEntryTestTag(it)).assertIsDisplayed() }
+    }
+
+    @Test
+    fun `back from a sub-panel returns to Plus, not to the root`() {
+        render()
+        compose.onNodeWithTag(MORE_TEST_TAG).performClick()
+        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.FAVORITE)).performClick()
+        compose.onNodeWithTag(BACK_TEST_TAG).performClick()
+        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.MOVE)).assertIsDisplayed()
     }
 
     @Test
@@ -118,6 +139,7 @@ class ConversationMenuContentTest {
     @Test
     fun `favorite opens eight emojis and a choice is reported`() {
         render()
+        compose.onNodeWithTag(MORE_TEST_TAG).performClick()
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.FAVORITE)).performClick()
         FAVORITE_REACTION_CHOICES.forEach { compose.onNodeWithTag("conversation-menu-favorite-$it").assertIsDisplayed() }
         compose.onNodeWithTag("conversation-menu-favorite-🔥").performClick()
@@ -127,6 +149,7 @@ class ConversationMenuContentTest {
     @Test
     fun `remove favorite appears only once a favorite is set`() {
         render(currentReaction = "🔥")
+        compose.onNodeWithTag(MORE_TEST_TAG).performClick()
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.FAVORITE)).performClick()
         compose.onNodeWithTag("conversation-menu-favorite-remove").performClick()
         assertThat(reactions).containsExactly(null)
@@ -135,6 +158,7 @@ class ConversationMenuContentTest {
     @Test
     fun `move lists the categories then my conversations, and a touch reports the target`() {
         render()
+        compose.onNodeWithTag(MORE_TEST_TAG).performClick()
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.MOVE)).performClick()
         compose.onNodeWithTag("conversation-menu-move-work").assertIsDisplayed()
         compose.onNodeWithText("My conversations").assertIsDisplayed()

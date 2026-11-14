@@ -93,6 +93,7 @@ struct ShareLocationChoiceSheet: View {
     let onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Void
     @State private var precision: SharedLocationPrecision = .city
     @State private var duration: SharedLocationShareDuration = .oneHour
+    @State private var openNoteID: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -117,7 +118,9 @@ struct ShareLocationChoiceSheet: View {
                 } header: {
                     Text(ShareLocationWording.precisionTitle)
                 } footer: {
-                    Text(ShareLocationWording.explain(name: displayName))
+                    MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
+                        Text(ShareLocationWording.explain(name: displayName))
+                    }
                 }
             }
             .navigationTitle(ShareLocationWording.sheetTitle(name: displayName))
@@ -175,7 +178,15 @@ enum ShareLocationWording {
     }
 
     static func explain(name: String) -> String {
-        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance, puis plus rien ; elle se met à jour quand Meeshy est ouvert. Tu peux arrêter à tout moment depuis sa fiche.", bundle: .main), name)
+        String(format: String(localized: "sharedLocation.share.explain", defaultValue: "%@ voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.", bundle: .main), name)
+    }
+
+    /// Le détail technique (#18088) : l'échéance et l'arrêt restent au repos, la mise à jour passe derrière un (i).
+    static var explainNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "sharedLocation.share.refresh.question", defaultValue: "Quand ma position se met-elle à jour ?", bundle: .main),
+            text: String(localized: "sharedLocation.share.refresh.note", defaultValue: "Elle se met à jour quand Meeshy est ouvert.", bundle: .main)
+        )
     }
 
     static var confirm: String {
