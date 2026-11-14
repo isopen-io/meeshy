@@ -21,6 +21,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
 | 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
 | 2026-11-14 | Une image de profil ou de communauté ne désigne qu'un hôte Meeshy (passerelle) | voir réveil 38 | #16809 | voir réveil 38 |
+| 2026-11-14 | Le détail Android d'une communauté dit « N en ligne », comme iOS et le web | voir réveil 40 | #18026 | voir réveil 40 |
 
 ## 2026-11-07 — lot 1
 
@@ -375,3 +376,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi ouvert : #18439 (iOS et Android consomment `community:updated`). Reste de #16857 : membres (rejoint/parti/rôle), suppression.
 - Pas de revue adversariale : diffusion vers les seuls membres actifs d'une identité qu'ils lisent déjà, ni permission ni migration.
 - Après fusion de #18440 : la suite complète a rougi `server-emit-door-sweep` (une dépendance nommée `emit: (userId: string, …)` ressemble, pour le balayage, à une porte d'émission redéclarée). Rattrapé en renommant la dépendance `deliver` (PR suivante). Gotcha : lancer `server-emit-door-sweep` sur tout nouveau diffuseur, même quand sa porte réelle est `broadcastToUser`.
+
+## 2026-11-14 — réveil 40 (13:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18440 et #18448 (`community:updated`, #18435) fusionnées. Le gel de la CI des PR est levé (#18048 fermée : `CI_DEV_SEUL=false`, `PR_CI_GEL=false`) : la CI de la PR redevient la preuve, ce qui rouvre les lots Android.
+- Lot : #18026 (Android). `ApiCommunity.onlineMemberCount: Int? = null` (un ancien serveur reste lisible), porté par `Community` ; `Community.onlineLine` rend le nombre à écrire, rien quand il est absent, nul ou négatif. `CommunityDetailScreen.StatsRow` l'écrit sous les compteurs, point `Indigo500` (iOS `brandPrimary`), rangée fusionnée pour TalkBack. Chaîne `community.online` adoptée du catalogue iOS dans les sept langues (`i18n/manifest/community.json` + `xcstrings_to_android.py`).
+- Témoins : `CommunityDecodingTest` (+4 : servi, `null`/absent, zéro/négatif, résultat de recherche).
+- Gates locaux : `xcstrings_to_android.py --check` vert, tests des scripts i18n 218/218. `meeshy.sh jvm-check` ne tourne plus en conteneur : `libsignal-client` vient de `build-artifacts.signal.org`, refusé (403) par le proxy — la preuve est `android.yml` sur la PR.
+- Prochain lot recommandé : #18061 (Android, la notification « ajouté à la communauté » ouvre la communauté), puis #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
