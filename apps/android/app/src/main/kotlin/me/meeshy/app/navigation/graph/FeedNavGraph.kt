@@ -92,13 +92,13 @@ internal fun NavGraphBuilder.feedNavGraph(
     ) {
         MoodSpotlightScreen(onClose = { navController.popBackStack() })
     }
-    sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
+    sheetComposable(Routes.MY_STORIES, navController) { entry, dismiss ->
         MyStoriesScreen(
             onBack = dismiss,
-            onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
-            onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
-            onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
-            onResumeDraft = { navController.navigateKeepingSheet(storyDoor) },
+            onCreateStory = { navController.navigateKeepingSheet(entry, storyDoor) },
+            onOpenStory = { userId -> navController.navigateKeepingSheet(entry, Routes.story(userId)) },
+            onEditStory = { storyId -> navController.navigateKeepingSheet(entry, Routes.storyComposerEdit(storyId)) },
+            onResumeDraft = { navController.navigateKeepingSheet(entry, storyDoor) },
         )
     }
     composable(Routes.SAVED_POSTS) {
