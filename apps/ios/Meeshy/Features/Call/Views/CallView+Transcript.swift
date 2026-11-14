@@ -87,7 +87,7 @@ extension CallView {
         return CallJournalPanel(
             items: composed.items, line: composed.line,
             showsOriginal: $journalShowsOriginal,
-            height: CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height),
+            height: CallJournalSizing.listHeight(isGroup: isGroupStage, windowHeight: DeviceLayout.windowSize.height, topClearance: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset), bottomInset: Self.chromeBottomInset),
             onToggleOriginal: { toggleOriginal(of: $0, on: .journal) },
             onClose: closePanel
         )
