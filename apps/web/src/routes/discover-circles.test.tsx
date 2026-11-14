@@ -214,7 +214,7 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(intro?.className).not.toContain('sr-only');
     expect(empty?.textContent).toContain('Vos liens apparaîtront ici');
     const info = empty?.querySelector<HTMLButtonElement>('button[aria-expanded]');
-    expect(info?.getAttribute('aria-label')).toBe('Comment rejoignent-elles mes cercles ?');
+    expect(info?.getAttribute('aria-label')).toBe('Comment les personnes rejoignent-elles mes cercles ?');
     const noteId = info?.getAttribute('aria-controls') ?? '';
     const note = document.getElementById(noteId);
     expect(note?.textContent).toBe('À mesure que vous échangez avec des personnes, elles rejoignent vos cercles.');

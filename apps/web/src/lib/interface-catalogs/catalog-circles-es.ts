@@ -6,7 +6,7 @@ import type { CirclesCatalog } from '../i18n-circles-catalog';
 const es = {
   'circles.section.requests': 'Solicitudes de subida',
   'circles.intro': 'Cada círculo define lo que una persona ve de ti: cuanto más cercano, más compartes.',
-  'circles.empty.question': '¿Cómo se unen a mis círculos?',
+  'circles.empty.question': '¿Cómo se unen las personas a mis círculos?',
   'circles.empty.title': 'Tus vínculos aparecerán aquí',
   'circles.empty.subtitle': 'A medida que hablas con personas, se unen a tus círculos.',
   'circles.empty.action': 'Buscar contactos',
