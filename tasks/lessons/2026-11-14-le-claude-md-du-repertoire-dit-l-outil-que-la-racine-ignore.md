@@ -1,9 +1,9 @@
-# Le `CLAUDE.md` du répertoire dit l'outil que la racine ignore
+## Le `CLAUDE.md` du répertoire dit l'outil que la racine ignore
 
 *2026-11-14, cycle 158. Contexte : vérification d'un lot Android depuis un
 conteneur sans SDK Android.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Pour prouver qu'un lot Kotlin compilait, j'ai **reconstruit à la main** un
 harnais Gradle « Kotlin pur » : un projet qui pointe ses `srcDirs` sur
@@ -21,7 +21,7 @@ miroir Maven.
 et `:core:e2ee`, sait exclure les fichiers liés à Android, et range sa sortie où
 la CI l'attend. Ma reconstruction ne faisait que `:core:model`, et moins bien.
 
-## Pourquoi je ne l'ai pas trouvé
+### Pourquoi je ne l'ai pas trouvé
 
 Le `CLAUDE.md` **racine** ne le mentionne pas. Celui d'`apps/android` le porte en
 tête, dans son bandeau de directive :
@@ -37,7 +37,7 @@ qu'il avait disparu avec la session.
 > n'est pas un index d'outils : il raconte une session, il ne garantit pas que ce
 > qu'il cite soit hors du dépôt.
 
-## La règle
+### La règle
 
 **Avant de construire un outil de vérification, lire le `CLAUDE.md` du
 répertoire concerné — pas seulement celui de la racine.** Les outils d'un
@@ -50,7 +50,7 @@ Et le réflexe qui coûte trois secondes :
 ls <domaine>/scripts; grep -rn "<ce que je veux faire>" <domaine>/CLAUDE.md <domaine>/*.sh
 ```
 
-## Le corollaire, et il est plus large
+### Le corollaire, et il est plus large
 
 Le dépôt porte déjà la leçon inverse (cycle 87 bis) : *« le coût d'un outil
 laissé hors du dépôt ne se paie pas en mémoire, mais en travail fait deux
