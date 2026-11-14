@@ -159,27 +159,55 @@ object CallEffectsStackRule {
     }
 }
 
-/** Ce que montre la barre d'Effets sous la bande de looks : le menu de base, les réglages, ou la liste des effets appliqués. */
-enum class CallEffectsBarMode { Base, Settings, Applied }
+/**
+ * Ce que montre la barre d'Effets : le menu de base (la rangée de genres et `‹ · Réglages · (+)`), le carrousel d'un genre
+ * posé au-dessus ([Looks]), les réglages, ou la liste des effets appliqués.
+ */
+enum class CallEffectsBarMode { Base, Looks, Settings, Applied }
 
 /**
- * La navigation de la barre `‹ · Réglages · (+)` (loi 14) : après le choix d'une fonction, elle REVIENT au menu de base.
- * Miroir de `CallEffectsBarRule` (iOS).
+ * La navigation de la barre `‹ · Réglages · (+)` (loi 14 ; C1 généralisée, décision porteur du 2026-11-14) : après le choix
+ * d'une fonction — un look, un cadre, une déformation, une couleur —, ce qu'elle avait ouvert se referme et la barre
+ * REVIENT au menu de base, en Effets comme au Montage. Seul un réglage continu (curseur, interrupteur du panneau
+ * Luminosité · Flou du fond) garde son panneau ouvert ; ‹ le referme (#17947). Miroir de `CallEffectsBarRule` (iOS, #18184)
+ * et de `call-effect-layers.ts` (web), mêmes vecteurs.
  */
 object CallEffectsBarRule {
-    /** Réglages bascule entre le menu de base et le panneau ; depuis la liste, il ouvre le panneau. */
+    /** P8 et C1 tels que dessinés : un mode s'ouvre sur le carrousel du genre où l'on entre. */
+    val entering: CallEffectsBarMode = CallEffectsBarMode.Looks
+
+    /** Réglages bascule entre le menu de base et le panneau ; depuis le carrousel ou la liste, il ouvre le panneau. */
     fun afterSettings(from: CallEffectsBarMode): CallEffectsBarMode =
         if (from == CallEffectsBarMode.Settings) CallEffectsBarMode.Base else CallEffectsBarMode.Settings
 
-    /** (+) a choisi un genre : ce que la barre avait ouvert se referme. */
+    /** (+) a choisi un genre : son carrousel s'ouvre, à la place de ce que la barre avait ouvert. */
     @Suppress("UNUSED_PARAMETER")
-    fun afterAddingLook(from: CallEffectsBarMode): CallEffectsBarMode = CallEffectsBarMode.Base
+    fun afterAddingLook(from: CallEffectsBarMode): CallEffectsBarMode = CallEffectsBarMode.Looks
+
+    /** Une puce de la rangée de genres ouvre le carrousel de son genre ; retoucher le genre déjà ouvert ([isOpen]) le referme. */
+    fun afterGenre(from: CallEffectsBarMode, isOpen: Boolean): CallEffectsBarMode =
+        if (from == CallEffectsBarMode.Looks && isOpen) CallEffectsBarMode.Base else CallEffectsBarMode.Looks
+
+    /** Le genre pressé de la rangée : celui dont le carrousel est ouvert ; au menu de base, aucun. */
+    fun pressed(genre: CallEffectKind, mode: CallEffectsBarMode): CallEffectKind? =
+        genre.takeIf { mode == CallEffectsBarMode.Looks }
 
     /** Annuler un effet referme la liste et rend le menu de base. */
     val afterRemoval: CallEffectsBarMode = CallEffectsBarMode.Base
 
-    /** Toute fonction choisie dans les réglages (« Chaque visage » au Montage) rend le menu de base. */
+    /**
+     * Toute fonction choisie — un look, une couleur, une déformation, un cadre, une déclinaison, l'option « Cadre »,
+     * « Chaque visage » — referme ce qu'elle avait ouvert et rend le menu de base. Le carrousel ne reste pas (remplace #17962
+     * point 2). Parcourir (une ambiance, « Plus d'ambiances », le défilement, un pas du lecteur d'écran) n'est pas un choix.
+     */
     val afterChoice: CallEffectsBarMode = CallEffectsBarMode.Base
+
+    /**
+     * #17947 — ‹ (et le retour système) referme le panneau de réglages par le chemin inverse de « Réglages » ; ailleurs il
+     * revient à l'appel (`null`). Un réglage continu (curseur, interrupteur) n'est pas un choix : le panneau reste ouvert.
+     */
+    fun afterBack(from: CallEffectsBarMode): CallEffectsBarMode? =
+        if (from == CallEffectsBarMode.Settings) afterSettings(from) else null
 
     /** L'appui long sur (+) ouvre la liste, seulement s'il y a quelque chose à lister. */
     fun afterShowingApplied(from: CallEffectsBarMode, hasLayers: Boolean): CallEffectsBarMode =
@@ -189,6 +217,9 @@ object CallEffectsBarRule {
     fun reconciled(mode: CallEffectsBarMode, hasLayers: Boolean): CallEffectsBarMode =
         if (mode == CallEffectsBarMode.Applied && !hasLayers) CallEffectsBarMode.Base else mode
 
-    /** Les puces de tri et la bande de looks ne se montrent que sur le menu de base. */
-    fun showsLooks(mode: CallEffectsBarMode): Boolean = mode == CallEffectsBarMode.Base
+    /** La rangée de genres vit sur le menu de base et sous le carrousel ; réglages et liste resserrent la barre. */
+    fun showsLooks(mode: CallEffectsBarMode): Boolean = mode == CallEffectsBarMode.Base || mode == CallEffectsBarMode.Looks
+
+    /** Le carrousel n'est posé au-dessus de la barre que tant qu'il est ouvert. */
+    fun showsCarousel(mode: CallEffectsBarMode): Boolean = mode == CallEffectsBarMode.Looks
 }

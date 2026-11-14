@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.VideoFilterPreset
+import me.meeshy.sdk.model.call.selectingFaceEffect
 import org.junit.Test
 
 class CallEffectsModeRuleTest {
@@ -105,8 +106,9 @@ class CallEffectsModeRuleTest {
 
     /**
      * #17947 (A) : un réglage continu n'est pas un choix — le panneau Luminosité · Flou du fond reste ouvert tant qu'on
-     * règle, et ne se referme qu'en retouchant « Réglages » (‹ quitte le mode). La fermeture automatique de #16979 vaut
-     * pour les choix discrets (look, cadre). Vecteurs partagés avec iOS et le web.
+     * règle, et se referme en retouchant « Réglages » ou par ‹ (#17947, 2026-11-14 : ‹ referme le panneau, un second ‹
+     * quitte le mode). La fermeture automatique de #16979 vaut pour les choix discrets (look, cadre). Vecteurs partagés
+     * avec iOS et le web.
      */
     @Test
     fun `the settings panel stays open while adjusting and closes only on Settings (#17947)`() {
@@ -117,6 +119,73 @@ class CallEffectsModeRuleTest {
         assertThat(adjusted.current.brightness).isEqualTo(0.1f)
         assertThat(adjusted.togglingSettings().bar).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
+    }
+
+    @Test
+    fun `back closes the settings panel to the base menu, and a second back leaves the mode (#17947)`() {
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).togglingSettings().withBrightness(0.2f)
+        val closed = open.back()
+        assertThat(closed?.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(closed?.current?.brightness).isEqualTo(0.2f)
+        assertThat(closed?.back()).isNull()
+    }
+
+    /** C1 généralisée (2026-11-14, #18185) : Effets s'ouvre sur son carrousel ; un look choisi le referme. */
+    @Test
+    fun `Effects opens on its carousel, and picking a face effect closes it back to the base menu`() {
+        val opened = CallEffectsModeState.opening(VideoFilterConfig())
+        assertThat(opened.bar).isEqualTo(CallEffectsBarMode.Looks)
+        val picked = opened.selecting(CallFaceEffect.Toad)
+        assertThat(picked.face).isEqualTo(CallFaceEffect.Toad)
+        assertThat(picked.bar).isEqualTo(CallEffectsBarMode.Base)
+    }
+
+    @Test
+    fun `picking a colour closes the carousel back to the base menu, the look kept`() {
+        val picked = CallEffectsModeState.opening(VideoFilterConfig()).showing(CallEffectsCategory.Color).selecting(VideoFilterPreset.Golden)
+        assertThat(picked.color).isEqualTo(VideoFilterPreset.Golden)
+        assertThat(picked.bar).isEqualTo(CallEffectsBarMode.Base)
+    }
+
+    @Test
+    fun `the item already chosen, or a look refused by a full stack, keeps the carousel open`() {
+        val opened = CallEffectsModeState.opening(VideoFilterConfig().selectingFaceEffect(CallFaceEffect.Angel))
+        assertThat(opened.selecting(CallFaceEffect.Angel).bar).isEqualTo(CallEffectsBarMode.Looks)
+        val full = CallEffectLayers.of(
+            listOf(
+                CallEffectLayer(CallEffectKind.Frame, "frame-1"),
+                CallEffectLayer(CallEffectKind.Landscape, "beach"),
+                CallEffectLayer(CallEffectKind.Voice, "deep"),
+            ),
+        )
+        val refused = CallEffectsModeState.opening(VideoFilterConfig(), full)
+        assertThat(refused.selecting(CallFaceEffect.Toad).bar).isEqualTo(CallEffectsBarMode.Looks)
+    }
+
+    @Test
+    fun `a genre chip reopens the carousel from the base menu, and the chip of the open carousel closes it`() {
+        val base = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad)
+        val reopened = base.showing(CallEffectsCategory.Color)
+        assertThat(reopened.bar).isEqualTo(CallEffectsBarMode.Looks)
+        assertThat(reopened.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(reopened.showing(CallEffectsCategory.Face).bar).isEqualTo(CallEffectsBarMode.Looks)
+        val closed = reopened.showing(CallEffectsCategory.Color)
+        assertThat(closed.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(closed.current).isEqualTo(base.current)
+    }
+
+    @Test
+    fun `back from the open carousel leaves the mode, the look kept (iOS #18184)`() {
+        assertThat(CallEffectsModeState.opening(VideoFilterConfig()).back()).isNull()
+        assertThat(CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad).back()).isNull()
+    }
+
+    @Test
+    fun `(+) opens the carousel of the genre it adds`() {
+        val base = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad)
+        val added = base.addingLook()
+        assertThat(added.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(added.bar).isEqualTo(CallEffectsBarMode.Looks)
     }
 
     @Test
