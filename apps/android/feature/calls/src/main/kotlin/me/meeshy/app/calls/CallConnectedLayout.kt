@@ -381,9 +381,9 @@ internal fun CallConnectedColumn(
  * P11.1 · L4.11 — la réserve haute de la scène : en duo la marge fixe d'avant ; en groupe, le haut entier de la scène depuis la
  * zone sûre ([CallTopBannerStack.groupStageTopDp] : rien quand l'en-tête flotte sur la grille, la rangée d'en-tête sinon), plus
  * la place que la pile des bandeaux prend sous l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct
- * compris), pour que la grille lui cède sa place au lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
- * qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne se recompose ni la colonne ne se remesure à
- * chaque image. En duo ([clearance] nul), la pile ne pousse rien.
+ * compris), pour que la grille lui cède sa place au lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page
+ * ([CallGroupGridClearance.layout]), qui ne change qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne
+ * se recompose ni la colonne ne se remesure à chaque image. En duo ([clearance] nul), la pile ne pousse rien.
  */
 @Composable
 private fun CallGroupStageTopReserve(base: Dp, clearance: CallGroupGridClearance?) {

@@ -287,7 +287,7 @@ private fun BoxScope.CallDuoStageOverlays(
 }
 
 /**
- * Loi 17.1 — ma vignette paraît et repart en fondu : à la connexion, au retour d'un cadre en direct, à la caméra rallumée. Une
+ * Loi 17.1 — ma vignette paraît et repart en fondu : à la connexion, au départ et au retour d'un cadre en direct. Une
  * `SurfaceView` ne se fond pas elle-même : le CADRE (liseré, ombre, plaque) fond d'abord sous un voile opaque, puis le voile se
  * lève sur ce qu'elle montre, monté seulement sous un voile qui n'est plus plein ; au départ, le voile retombe puis le cadre fond
  * ([CallRemoteVideoFade.presenceVeilDelayMillis], [CallRemoteVideoFade.presenceFrameDelayMillis]). Interruptible : un retour
