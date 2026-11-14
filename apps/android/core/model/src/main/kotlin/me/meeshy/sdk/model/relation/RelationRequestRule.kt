@@ -37,7 +37,7 @@ public object RelationRequestRule {
         cooldownUntilMillis: Long?,
         nowMillis: Long,
     ): RelationRequestVerdict {
-        if (rungAfter(current) != target) return RelationRequestVerdict.Refused(RelationRequestRefusal.PHASE_SKIP)
+        if (!reachable(target, current)) return RelationRequestVerdict.Refused(RelationRequestRefusal.PHASE_SKIP)
         if (cooldownUntilMillis != null && cooldownUntilMillis > nowMillis) {
             return RelationRequestVerdict.Refused(RelationRequestRefusal.COOLDOWN)
         }
@@ -46,6 +46,17 @@ public object RelationRequestRule {
         }
         return RelationRequestVerdict.Allowed
     }
+
+    /**
+     * Ami se demande DIRECTEMENT tant qu'on est sous Ami (décision porteur du 2026-11-13, #18101) ; tout autre cran est
+     * le suivant, ou rien. Miroir de `reachable` côté serveur.
+     */
+    private fun reachable(target: RelationLevel, current: RelationLevel): Boolean =
+        if (target == RelationLevel.FRIEND) {
+            current == RelationLevel.PUBLIC || current == RelationLevel.COMMUNITY || current == RelationLevel.ACQUAINTANCE
+        } else {
+            rungAfter(current) == target
+        }
 
     /** Proche et Sang exigent leur série (RG-04) ; Connaissance et Ami n'en ont pas. */
     private fun requiresSeries(target: RelationLevel): Boolean =
