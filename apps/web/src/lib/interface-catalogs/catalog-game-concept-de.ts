@@ -283,7 +283,6 @@ const de = {
   'game.spend.missing.freeze': 'Es fehlen {missing}, um eine Hüterin zu rufen.',
   'game.spend.missing.relight': 'Es fehlen {missing}, um deine Flamme neu zu entzünden.',
   'game.spend.missing.reroll': 'Es fehlen {missing}, um diesen Akt zu tauschen.',
-  'game.spend.missing.unlock': 'Es fehlen {missing} bis zur Öffnung.',
   'game.detail.badge.missing': 'Es fehlen {missing} bis zum ersten Stern',
   'game.detail.levelstep.progress': 'Du stehst bei {progress} in dieser Prüfung',
   'game.detail.fact.convertible': 'Das ist dein Licht: die Funken, die eine Meesh prägen.',

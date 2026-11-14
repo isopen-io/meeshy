@@ -281,7 +281,6 @@ const fr = {
   'game.spend.missing.freeze': 'Il manque {missing} pour prendre une Veilleuse.',
   'game.spend.missing.relight': 'Il manque {missing} pour rallumer ta Flamme.',
   'game.spend.missing.reroll': 'Il manque {missing} pour changer cet acte.',
-  'game.spend.missing.unlock': 'Il manque {missing} pour l’ouvrir.',
   'game.detail.badge.missing': 'Il manque {missing} pour la première étoile',
   'game.detail.levelstep.progress': 'Tu en es à {progress} pour cette épreuve',
   'game.detail.fact.convertible': 'C’est ta lumière : les étincelles qui frappent une Meesh.',

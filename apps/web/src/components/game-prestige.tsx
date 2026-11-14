@@ -95,19 +95,17 @@ export function GamePrestige({ level, score, prestige, online, pending, error, o
   return (
     <>
       <GameCard id="game-prestige" labelledBy="game-prestige-title" tint={GAME_BRAND}>
-        <h2 id="game-prestige-title" className="text-title font-bold" style={{ color: GAME_INK }}>
+        <h2 id="game-prestige-title" className="sr-only">
           {gameText('game.prestige.title')}
         </h2>
-        <div className="flex justify-center py-1">
-          <PrestigeScene level={level.level} tier={level.tier} progress={level.progress} stars={prestige.stars} plate={plate} size={88} playKey={playKey} {...sceneProps} />
-        </div>
-        {/* Les étoiles se touchent : la prochaine à poser (ou la dernière, toutes posées) dit ses précisions (#9563). */}
+        {/* La scène ET ses étoiles se touchent : la prochaine à poser (ou la dernière) dit ses précisions (#9563) ; le compteur « N / 5 » est déjà en tête de page. */}
         <GameTouch
+          named
           detail={starDetail(prestige, Math.min(prestige.max, prestige.stars + (maxed ? 0 : 1)))}
-          className="self-center rounded-chip px-3 text-center text-body font-semibold"
-          style={{ minHeight: 44, color: GAME_INK }}
+          className="flex justify-center self-center rounded-chip py-1"
+          style={{ minHeight: 44 }}
         >
-          {gameText('game.prestige.stars', { stars: formatCount(prestige.stars), max: formatCount(prestige.max) })}
+          <PrestigeScene level={level.level} tier={level.tier} progress={level.progress} stars={prestige.stars} plate={plate} size={88} playKey={playKey} {...sceneProps} />
         </GameTouch>
         {passed === null ? null : (
           <p role="status" className="text-center text-body font-bold" style={{ color: GAME_GOOD }}>
@@ -121,7 +119,7 @@ export function GamePrestige({ level, score, prestige, online, pending, error, o
         ) : !prestige.canPrestige && passed === null ? (
           <>
             <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-              {gameText('game.prestige.locked', { level: formatCount(level.level) })}
+              {gameText('game.prestige.locked')}
             </p>
             <GameRequirementLine concept="prestige" current={level.level} required={GAME_PRESTIGE_LEVEL} />
           </>

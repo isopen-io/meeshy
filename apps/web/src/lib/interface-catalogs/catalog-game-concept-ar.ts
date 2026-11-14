@@ -283,7 +283,6 @@ const ar = {
   'game.spend.missing.freeze': 'ينقصك {missing} لأخذ قنديل.',
   'game.spend.missing.relight': 'ينقص {missing} لإعادة إشعال لهبك.',
   'game.spend.missing.reroll': 'ينقصك {missing} لتبديل هذا الفصل.',
-  'game.spend.missing.unlock': 'ينقص {missing} لفتحه.',
   'game.detail.badge.missing': 'ينقص {missing} للنجمة الأولى',
   'game.detail.levelstep.progress': 'بلغتَ {progress} في هذا الاختبار',
   'game.detail.fact.convertible': 'إنه نورك: الشرارات التي تسكّ Meesh.',

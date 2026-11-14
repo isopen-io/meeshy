@@ -283,7 +283,6 @@ const it = {
   'game.spend.missing.freeze': 'Mancano {missing} per prendere una Lucerna.',
   'game.spend.missing.relight': 'Mancano {missing} per riaccendere la tua Fiamma.',
   'game.spend.missing.reroll': 'Mancano {missing} per cambiare questo atto.',
-  'game.spend.missing.unlock': 'Mancano {missing} per aprirlo.',
   'game.detail.badge.missing': 'Mancano {missing} per la prima stella',
   'game.detail.levelstep.progress': 'Sei a {progress} in questa prova',
   'game.detail.fact.convertible': 'È la tua luce: le scintille che coniano una Meesh.',

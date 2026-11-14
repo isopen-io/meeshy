@@ -283,7 +283,6 @@ const es = {
   'game.spend.missing.freeze': 'Te faltan {missing} para tomar una Vela.',
   'game.spend.missing.relight': 'Te faltan {missing} para volver a encender tu Llama.',
   'game.spend.missing.reroll': 'Te faltan {missing} para cambiar este acto.',
-  'game.spend.missing.unlock': 'Te faltan {missing} para abrirlo.',
   'game.detail.badge.missing': 'Te faltan {missing} para la primera estrella',
   'game.detail.levelstep.progress': 'Vas por {progress} en esta prueba',
   'game.detail.fact.convertible': 'Es tu luz: las chispas que acuñan una Meesh.',

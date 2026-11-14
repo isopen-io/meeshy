@@ -283,7 +283,6 @@ const en = {
   'game.spend.missing.freeze': 'You lack {missing} to take a Vigil.',
   'game.spend.missing.relight': 'Still missing to relight your Flame: {missing}.',
   'game.spend.missing.reroll': 'You lack {missing} to change this act.',
-  'game.spend.missing.unlock': 'Still missing to unlock it: {missing}.',
   'game.detail.badge.missing': '{missing} to the first star',
   'game.detail.levelstep.progress': 'You’re at {progress} on this trial',
   'game.detail.fact.convertible': 'This is your light: the sparks that mint a Meesh.',

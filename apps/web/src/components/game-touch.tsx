@@ -6,7 +6,7 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 import type { GameDetailFact } from '@/lib/game/detail-families';
 import { detailStore } from '@/lib/view/detail-store';
 import { factDetail, type ElementDetail } from '@/lib/view/game-detail';
-import { formatCount, gameText, levelsLabel } from '@/lib/view/game-copy';
+import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { PRESS } from './game-press';
 import { GAME_INK, GAME_INK_2 } from './game-surface';
@@ -207,17 +207,5 @@ export function GameRequirementLine({ concept, current, required, record = false
       : { fact: 'level_now', label: gameText('game.mint.row.level'), value: formatCount(requirement.current) },
     { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) },
   ];
-  return (
-    <>
-      <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />
-      {requirement.met ? null : (
-        <MissingLine
-          concept={concept}
-          fact="spend_missing"
-          line={gameText('game.spend.missing.unlock', { missing: levelsLabel(requirement.missing) })}
-          amount={levelsLabel(requirement.missing)}
-        />
-      )}
-    </>
-  );
+  return <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />;
 }

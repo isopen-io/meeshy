@@ -150,7 +150,7 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
   });
 
   test('le Prestige dit où il s’ouvre et où tu en es', () => {
-    expect(state('prestige', playing)).toBe('La Renaissance s’ouvre au niveau 100. Tu es au niveau 11.');
+    expect(state('prestige', playing)).toBe('La Renaissance s’ouvre au niveau 100.');
   });
 });
 

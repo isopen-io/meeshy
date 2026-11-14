@@ -283,7 +283,6 @@ const pt = {
   'game.spend.missing.freeze': 'Faltam {missing} para pegar uma Lamparina.',
   'game.spend.missing.relight': 'Faltam {missing} para reacender sua Chama.',
   'game.spend.missing.reroll': 'Faltam {missing} para trocar este ato.',
-  'game.spend.missing.unlock': 'Faltam {missing} para abrir.',
   'game.detail.badge.missing': 'Faltam {missing} para a primeira estrela',
   'game.detail.levelstep.progress': 'Você está em {progress} nesta prova',
   'game.detail.fact.convertible': 'É a sua luz: as faíscas que cunham uma Meesh.',
