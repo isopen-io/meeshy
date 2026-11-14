@@ -235,6 +235,10 @@ public nonisolated struct MeeshyColors {
     /// ALIAS de `warning` — une seule valeur ; le miroir CSS (`--ios-media-trim`)
     /// et son jumeau Android (`MediaTrim`) arrivent avec les lots Android et web du kit.
     public static let mediaTrim = warning
+    /// Le jaune de la ligne d'aimantation engagée (K23) : ALIAS de `warning`, la
+    /// même valeur que `mediaTrim` — la frise (K22) le lira aussi. Les miroirs
+    /// (`--ios-media-snap`, `MediaSnap`) arrivent avec les lots Android et web.
+    public static let mediaSnap = warning
     /// Voile léger : dégradé sous le chrome, disque derrière une icône.
     public static let scrimSoft = mediaBackdrop.opacity(0.3)
     /// Voile régulier : sous un texte posé sur un média.
