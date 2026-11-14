@@ -246,10 +246,10 @@ nonisolated enum BloodRitualConsentCopy {
         String(localized: "circles.ritual.consent.folding.title", defaultValue: "Ce que ça montre, à qui, combien de temps, comment arrêter", bundle: .main)
     }
 
-    /// Où retirer un consentement : la fiche de la personne, à la même place que l'activation (E3). La route de
-    /// retrait n'existe pas encore (#14401) : l'écran le dit.
+    /// Où refuser un consentement, et ce que l'écran ne promet pas : la route de retrait n'existe pas encore
+    /// (#14401), l'écran le dit en une phrase visible.
     static var withdrawal: String {
-        String(localized: "circles.ritual.consent.withdrawal", defaultValue: "Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible.", bundle: .main)
+        String(localized: "circles.ritual.consent.withdrawal", defaultValue: "Chaque partage se refuse ici ; le retirer après coup n'est pas encore possible.", bundle: .main)
     }
 
     static func folding(for key: RelationRitualConsentKey, otherName: String) -> String {

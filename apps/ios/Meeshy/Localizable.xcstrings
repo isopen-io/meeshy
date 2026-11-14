@@ -8469,43 +8469,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "قبل الختم، اختر ما تشاركه مع %@. يمكنك رفض أي مشاركة والعودة إليها لاحقًا."
+            "value": "قبل الختم، اختر ما تشاركه مع %@. يمكنك رفض أي مشاركة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle vor dem Besiegeln, was du mit %@ teilst. Jede Freigabe kannst du ablehnen, und du kannst sie später ändern."
+            "value": "Wähle vor dem Besiegeln, was du mit %@ teilst. Jede Freigabe kannst du ablehnen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Before sealing, choose what you share with %@. Each share can be declined, and you can come back to it."
+            "value": "Before sealing, choose what you share with %@. Each share can be declined."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Antes de sellar, elige qué compartes con %@. Cada uso compartido puede rechazarse y podrás volver a él."
+            "value": "Antes de sellar, elige qué compartes con %@. Cada uso compartido puede rechazarse."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable, et tu pourras y revenir."
+            "value": "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prima di sigillare, scegli cosa condividi con %@. Ogni condivisione si può rifiutare e potrai tornarci."
+            "value": "Prima di sigillare, scegli cosa condividi con %@. Ogni condivisione si può rifiutare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Antes de selar, escolha o que você compartilha com %@. Cada compartilhamento pode ser recusado e você poderá voltar a ele."
+            "value": "Antes de selar, escolha o que você compartilha com %@. Cada compartilhamento pode ser recusado."
           }
         }
       }
@@ -159327,43 +159327,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الشارات والمستوى والسلسلة"
+            "value": "الأوسمة والمستوى واللهب"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abzeichen, Level und Serie"
+            "value": "Medaillen, Level und Flamme"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges, level and streak"
+            "value": "Medals, level and Flame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Insignias, nivel y racha"
+            "value": "Medallas, nivel y Llama"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges, niveau et série"
+            "value": "Médailles, niveau et Flamme"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badge, livello e serie"
+            "value": "Medaglie, livello e Fiamma"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Emblemas, nível e sequência"
+            "value": "Medalhas, nível e Chama"
           }
         }
       }
@@ -328198,43 +328198,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستتمكن من سحب كل مشاركة في أي وقت من بطاقة هذا الشخص. قريبًا."
+            "value": "ترفض كل مشاركة هنا؛ سحبها لاحقًا غير متاح بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kannst jede Freigabe jederzeit über die Karte dieser Person zurückziehen. Bald verfügbar."
+            "value": "Jede Freigabe lehnst du hier ab; sie danach zurückzuziehen ist noch nicht möglich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You will be able to withdraw each share at any time, from this person's card. Coming soon."
+            "value": "Each share is declined here; withdrawing it afterwards is not possible yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Podrás retirar cada uso compartido en cualquier momento, desde la ficha de esta persona. Muy pronto."
+            "value": "Cada uso compartido se rechaza aquí; retirarlo después aún no es posible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible."
+            "value": "Chaque partage se refuse ici ; le retirer après coup n'est pas encore possible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Potrai ritirare ogni condivisione in qualsiasi momento, dalla scheda di questa persona. Presto disponibile."
+            "value": "Ogni condivisione si rifiuta qui; ritirarla dopo non è ancora possibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você poderá retirar cada compartilhamento a qualquer momento, na ficha desta pessoa. Em breve."
+            "value": "Cada compartilhamento se recusa aqui; retirá-lo depois ainda não é possível."
           }
         }
       }
