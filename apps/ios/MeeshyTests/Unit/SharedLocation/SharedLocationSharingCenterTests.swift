@@ -164,12 +164,17 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(store.kept)
     }
 
-    func test_aKeptRosterPastItsDeadline_isNotRestored() {
+    func test_aKeptRosterPastItsDeadline_isShownAsEnded_andStopsTheServerShare() async {
         let store = FakeSharedLocationRosterStore()
         store.kept = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .oneHour, now: t0.addingTimeInterval(-7200))
-        let (sut, _, fixes, _) = makeSUT(store: store)
+        let (sut, emitter, fixes, _) = makeSUT(store: store)
 
         XCTAssertNil(sut.entry(for: alice))
+
+        await sut.reconcile()
+
+        XCTAssertEqual(emitter.stops, 1)
+        XCTAssertNil(store.kept)
         XCTAssertFalse(fixes.isFollowing)
     }
 

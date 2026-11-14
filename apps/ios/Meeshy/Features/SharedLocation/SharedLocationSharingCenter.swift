@@ -49,7 +49,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     nonisolated deinit {}
 
     /// Une liste gardée d'un lancement précédent reprend : le partage serveur court toujours jusqu'à son terme, et
-    /// « Arrêter » doit rester à un geste même après que l'app a été tuée.
+    /// « Arrêter » doit rester à un geste même après que l'app a été tuée. Une échéance passée pendant que l'app
+    /// dormait se solde aussitôt : la personne est retirée du partage serveur, et une liste échue l'arrête.
     init(
         emitter: SharedLocationEmitting,
         fixes: SharedLocationFixProviding,
@@ -62,7 +63,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         self.store = store
         self.now = now
         self.schedulesDeadlines = schedulesDeadlines
-        let restored = store.load()?.pruned(now: now()) ?? .empty
+        let restored = store.load() ?? .empty
         roster = restored
         guard !restored.isEmpty else { return }
         startFollowing()
@@ -95,22 +96,23 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard !isBusy else { return nil }
         isBusy = true
         defer { isBusy = false }
-        let next = roster.pruned(now: now()).removing(userId: userId)
-        return await publish(next, fix: next.isEmpty ? nil : await restartFix())
+        return await republish(roster.pruned(now: now()).removing(userId: userId))
     }
 
     /// Une échéance est passée : la retirer du partage serveur.
     func reconcile() async {
         let pruned = roster.pruned(now: now())
         guard pruned != roster else { return }
-        _ = await publish(pruned, fix: pruned.isEmpty ? nil : await restartFix())
+        _ = await republish(pruned)
     }
 
-    /// Redémarrer le partage serveur demande une position : la dernière envoyée, sinon celle de l'appareil.
-    private func restartFix() async -> SharedLocationFix? {
-        if let last = lastSent?.fix { return last }
-        if case .fix(let fix) = await fixes.currentFix() { return fix }
-        return nil
+    /// Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon celle de
+    /// l'appareil. Une liste vide s'arrête sans position.
+    private func republish(_ next: SharedLocationRoster) async -> SharedLocationShareProblem? {
+        guard !next.isEmpty else { return await publish(next, fix: nil) }
+        if let last = lastSent?.fix { return await publish(next, fix: last) }
+        guard case .fix(let fix) = await fixes.currentFix() else { return .locationUnavailable }
+        return await publish(next, fix: fix)
     }
 
     /// Un relevé de l'appareil pendant le partage.
