@@ -126,6 +126,11 @@ object SocketEventNames {
     const val LOCATION_SHARE_CHANGED = "location:share-changed"
     const val LOCATION_SHARE_ENDED = "location:share-ended"
 
+    // MA position partagée à des personnes (#16985) : client -> serveur, chacun avec son accusé
+    const val LOCATION_SHARE_START = "location:share-start"
+    const val LOCATION_SHARE_STOP = "location:share-stop"
+    const val LOCATION_SHARE_UPDATE = "location:share-update"
+
     // media
     const val MEDIA_CAPTION_TRANSLATION_UPDATED = "media:caption-translation-updated"
 
@@ -379,6 +384,9 @@ object SocketEventNames {
         LOCATION_LIVE_UPDATED,
         LOCATION_SHARE_CHANGED,
         LOCATION_SHARE_ENDED,
+        LOCATION_SHARE_START,
+        LOCATION_SHARE_STOP,
+        LOCATION_SHARE_UPDATE,
         MEDIA_CAPTION_TRANSLATION_UPDATED,
         MESSAGE_ATTACHMENT_UPDATED,
         MESSAGE_DELETED,
