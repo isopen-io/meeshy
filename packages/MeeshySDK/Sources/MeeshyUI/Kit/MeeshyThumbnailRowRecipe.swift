@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import SwiftUI
 
 /// Une ombre, en valeurs : opacité du noir, rayon, décalage vertical.
@@ -36,7 +37,7 @@ public nonisolated struct MeeshyThumbnailRowRecipe: Equatable, Sendable {
 
     public static let defaultTileHeight: CGFloat = 48
     public static let minTileHeight: CGFloat = 32
-    public static let defaultAspectRatio: CGFloat = 9.0 / 16.0
+    public static let defaultAspectRatio: CGFloat = SceneShape.aspect
     public static let radius = MeeshyRadius.xs
     public static let spacing = MeeshySpacing.xsPlus
     public static let ringWidth = MeeshyBorder.strong
