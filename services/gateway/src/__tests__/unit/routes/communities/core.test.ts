@@ -53,6 +53,9 @@ const mockCommunity = {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
+    messageAttachment: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
     community: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(null),
@@ -433,12 +436,31 @@ describe('POST /communities — avatar (#16788)', () => {
     const prisma = makePrisma();
     prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
     prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    prisma.messageAttachment.findFirst = jest.fn<any>().mockResolvedValue({ id: 'att-own' });
     const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST', url: '/communities',
       payload: { name: 'My Community', isPrivate: false, avatar: '2026/11/65f0c0ffee/community_avatar.webp' },
     });
     expect(res.statusCode).toBe(201);
+    expect(prisma.messageAttachment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ uploadedBy: USER_ID }) }),
+    );
+    await app.close();
+  });
+
+  it("refuse le fichier d'un autre en 400 IDENTITY_IMAGE_NOT_OWNED sans rien créer (#16811)", async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: '2026/11/usr-autre/photo_privee.jpg' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+    expect(prisma.community.create).not.toHaveBeenCalled();
     await app.close();
   });
 
