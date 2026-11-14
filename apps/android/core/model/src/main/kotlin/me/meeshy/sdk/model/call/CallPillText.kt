@@ -119,5 +119,11 @@ sealed interface CallCaptionsFooter {
             if (pairs.distinct().size <= 1) return TouchForOriginal("${newest.first} → ${newest.second}")
             return TranslatedLanguages(pairs.flatMap { listOf(it.first, it.second) }.toSet().size)
         }
+
+        /**
+         * #17964 — the foot of the journal open in the pill, next to the « Journal » that closes it: the foot of the
+         * captions, without a wait — the journal draws none. Mirrors iOS `CallCaptionsFooter.journal(lines:)`.
+         */
+        fun journal(lines: List<CallLiveCaptionLine>): CallCaptionsFooter = resolve(lines.map { it.settled(Long.MAX_VALUE) })
     }
 }

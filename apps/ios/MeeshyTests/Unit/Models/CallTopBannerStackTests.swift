@@ -328,3 +328,93 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la marge de la pile, celle du bandeau de partage")
     }
 }
+
+/// #17965 (L1.8, L6) — en paysage, la pile des bannières a la borne de la pilule (560), centrée,
+/// et ma vignette garde son coin à côté d'elle tant que la pile, resserrée pour la laisser, reste
+/// lisible. En portrait, rien ne change : la pile tient la largeur et ma vignette descend dessous.
+/// Vecteurs (pt) partagés avec Android et le web.
+@MainActor
+final class CallTopBannerSpanTests: XCTestCase {
+
+    private let phoneLandscape = CGSize(width: 852, height: 393)
+    private let phonePortrait = CGSize(width: 393, height: 852)
+    private let padLandscape = CGSize(width: 1194, height: 834)
+
+    func test_landscapeMaxWidth_isThePillBound() {
+        XCTAssertEqual(CallTopBannerStack.landscapeMaxWidth, 560)
+        XCTAssertEqual(CallTopBannerStack.landscapeMaxWidth, CallPillWidth.text)
+    }
+
+    func test_portrait_keepsTheWholeWidth_andTheTileGoesUnder() {
+        let span = CallTopBannerStack.span(window: phonePortrait, safeHorizontal: 0, selfTile: CallTopBannerTileNeighbor(width: 100, edgeDistance: 16))
+        XCTAssertNil(span.bannerMaxWidth)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+        XCTAssertEqual(span.stackMaxWidth, .infinity)
+    }
+
+    func test_landscape_withoutTile_isBoundedTo560() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: nil)
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+        XCTAssertEqual(span.stackMaxWidth, 560 + 2 * CallTopBannerStack.horizontalMargin)
+    }
+
+    func test_landscape_tileAtTheTop_keepsItsCornerBesideTheStack() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+        XCTAssertEqual(span.bannerMaxWidth, 544)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_landscape_railsOpen_theStackNarrowsAgainForTheTile() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 135))
+        XCTAssertEqual(span.bannerMaxWidth, 306)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_landscape_tooNarrowBeside_theTileGoesUnder_andTheStackTakes560() {
+        let span = CallTopBannerStack.span(window: phoneLandscape, safeHorizontal: 59, selfTile: CallTopBannerTileNeighbor(width: 195, edgeDistance: 135))
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertFalse(span.keepsSelfTileBeside)
+    }
+
+    func test_padLandscape_tileBeside_stackAt560() {
+        let span = CallTopBannerStack.span(window: padLandscape, safeHorizontal: 0, selfTile: CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+        XCTAssertEqual(span.bannerMaxWidth, 560)
+        XCTAssertTrue(span.keepsSelfTileBeside)
+    }
+
+    func test_minimumWidth_holdsTheShareBannerAndItsStop() {
+        XCTAssertGreaterThanOrEqual(CallTopBannerStack.landscapeMinimumWidth, 300)
+    }
+
+    func test_stackView_isBoundedAndCentred_inMotion() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("CallTopBannerStack.span(window: geo.size, safeHorizontal: safeHorizontal, selfTile: selfTile)"))
+        XCTAssertTrue(stack.contains(".frame(maxWidth: span.stackMaxWidth)"))
+        XCTAssertTrue(stack.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: span)"))
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertTrue(connected.contains("safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor"))
+    }
+
+    func test_selfTile_keepsItsCorner_whenTheStackLeavesItBeside() throws {
+        let selfView = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift"))
+        let clearance = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var selfTileTopBannerClearance: CGFloat", in: selfView))
+        XCTAssertTrue(clearance.contains("CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside"))
+        XCTAssertTrue(selfView.contains("var selfTileBannerNeighbor: CallTopBannerTileNeighbor?"))
+    }
+
+    // MARK: - Ma vignette vue de la pile
+
+    func test_duoTile_atATopCorner_isSeenWithItsMargin() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false), CallTopBannerTileNeighbor(width: 130, edgeDistance: 16))
+    }
+
+    func test_duoTile_railsOpen_isSeenAgainstTheRail() {
+        XCTAssertEqual(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: true), CallTopBannerTileNeighbor(width: 130, edgeDistance: 135))
+    }
+
+    func test_duoTile_atTheBottom_orHidden_leavesTheStackAlone() {
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: false, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+        XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: false, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
+    }
+}

@@ -9,6 +9,13 @@ enum class CallScreenPanel(val action: CallAction, val isDrawnInThePill: Boolean
     Record(CallAction.Recording, true),
     People(CallAction.AddPeople, false),
     Journal(CallAction.Journal, true),
+    ;
+
+    /**
+     * #17964 — the journal is READ at rest: open, it does not unfold the (…) (P9b.3), and only its own « Journal », at its
+     * foot, in a white disc, closes it (P13.9) — opening it again keeps it. Mirrors iOS `CallScreenPanel.isReadAtRest`.
+     */
+    val isReadAtRest: Boolean get() = this == Journal
 }
 
 /** A mode that frees the screen; mirrors iOS `CallScreenMode`. */
@@ -33,7 +40,12 @@ sealed interface CallScreenLayer {
     val openPanel: CallScreenPanel? get() = (this as? Panel)?.panel
     val activeMode: CallScreenMode? get() = (this as? Mode)?.mode
 
-    val isExpanded: Boolean get() = this is Menu || this is MenuOverJournal || this is Panel
+    val isExpanded: Boolean
+        get() = when (this) {
+            Menu, MenuOverJournal -> true
+            is Panel -> !panel.isReadAtRest
+            Idle, is Mode -> false
+        }
 
     val pillPanel: CallScreenPanel? get() = openPanel?.takeIf { it.isDrawnInThePill }
 
@@ -62,7 +74,7 @@ sealed interface CallScreenLayer {
 
     fun opening(panel: CallScreenPanel): CallScreenLayer = when {
         this is Mode -> this
-        this is Panel && this.panel == panel -> Menu
+        this is Panel && this.panel == panel -> if (panel.isReadAtRest) this else Menu
         else -> Panel(panel)
     }
 
