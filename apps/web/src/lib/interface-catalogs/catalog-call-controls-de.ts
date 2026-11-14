@@ -81,6 +81,8 @@ const de = {
   'callControls.selfTile.corner.bottom-left': 'Mein Vorschaubild: unten links',
   'callControls.selfTile.corner.bottom-right': 'Mein Vorschaubild: unten rechts',
   'callControls.spotlight.self': 'Mein Bild hervorheben',
+  'callControls.fullscreen.total.enter': 'Totales Vollbild',
+  'callControls.fullscreen.total.exit': 'Totales Vollbild beenden',
   'callControls.screenZoom.hint': 'Geteilter Bildschirm: zum Zoomen zusammenziehen oder Strg + Mausrad, zweimal tippen für die ganze Ansicht',
   'callControls.liveFrame.proposal': '{name} schlägt dir den Rahmen „{frame}“ vor',
   'callControls.liveFrame.proposal.anonymous': 'Dein Gegenüber schlägt dir den Rahmen „{frame}“ vor',

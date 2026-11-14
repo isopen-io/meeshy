@@ -176,12 +176,12 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     }
   });
 
-  test('aucune vue ⇒ l’état VIDE, titre et sous-titre', async () => {
+  test('aucune vue ⇒ l’état VIDE, le titre seul', async () => {
     const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 0 });
     expect(host.querySelector('[data-story-viewer]')).toBeNull();
     expect(host.querySelector('[data-viewers-empty]')).not.toBeNull();
     expect(host.textContent).toContain('Aucune vue pour le moment');
-    expect(host.textContent).toContain('Les personnes qui regardent votre story apparaîtront ici.');
+    expect(host.textContent).not.toContain('apparaîtront ici');
   });
 });
 

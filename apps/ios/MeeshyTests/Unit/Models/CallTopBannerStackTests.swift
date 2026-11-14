@@ -417,4 +417,159 @@ final class CallTopBannerSpanTests: XCTestCase {
         XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: true, isAtTop: false, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
         XCTAssertNil(CallTopBannerTileNeighbor.duoTile(isShown: false, isAtTop: true, width: 130, ownInset: 16, safeHorizontal: 59, railsShown: false))
     }
+
+    // MARK: - #17963 — la puce de capture : verre teinté rouge, 5 s, rangée avec les bannières (R1.2, R1.4, R1.6)
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func kitMilliseconds(_ name: String) throws -> Double {
+        let source = try String(contentsOf: Self.repoRoot.appendingPathComponent("packages/shared/types/call-capture.ts"), encoding: .utf8)
+        let regex = try NSRegularExpression(pattern: "export const \(name) = ([0-9_]+);")
+        let match = try XCTUnwrap(regex.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)), "\(name) introuvable dans le kit")
+        let literal = try XCTUnwrap(Range(match.range(at: 1), in: source).map { String(source[$0]) })
+        return try XCTUnwrap(Double(literal.replacingOccurrences(of: "_", with: "")))
+    }
+
+    /// R1.4 — une capture ponctuelle tient la puce le temps du kit partagé, 5 s, comme Android et
+    /// le web ; la passerelle relaie sa fin synthétique au même terme. Le témoin lit la constante
+    /// du kit : elle ne peut plus diverger en silence.
+    func test_captureChip_lastsTheKitScreenshotAlertTTL() throws {
+        let ttl = try kitMilliseconds("CALL_SCREENSHOT_ALERT_TTL_MS")
+        XCTAssertEqual(ttl, 5_000)
+        XCTAssertEqual(CallCaptureAlertCapsule.transientSeconds * 1_000, ttl, "la puce dure CALL_SCREENSHOT_ALERT_TTL_MS")
+    }
+
+    /// R1.2 — la puce porte le verre teinté rouge du kit, celui du bandeau de partage : plus
+    /// d'aplat rouge. L'atome du kit directement (`meeshyGlass`, ton `theme`), que le cliquet
+    /// `kit-glass-call` ne compte pas. L'anneau blanc puis la phrase, aucun bouton, 44 pt de
+    /// haut, une seule annonce pour VoiceOver.
+    func test_captureChip_wearsTheKitRedTintedGlass_likeTheShareBanner() throws {
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func capsule(_ text: String) -> some View", in: views))
+        XCTAssertTrue(
+            capsule.contains(".meeshyGlass(in: Capsule(), tone: .theme, tint: MeeshyColors.error.opacity(MeeshyOpacity.medium))"),
+            "le verre teinté rouge du kit, la recette même de « Vous partagez votre écran » (adaptiveLiquidGlass y renvoie)"
+        )
+        XCTAssertFalse(capsule.contains("isInteractive: true"), "rien à toucher : un verre au repos")
+        XCTAssertFalse(capsule.contains(".background(MeeshyColors.error"), "plus d'aplat rouge")
+        XCTAssertFalse(capsule.contains("Button("), "la puce n'a aucun bouton")
+        XCTAssertTrue(capsule.contains(".stroke(Color.white, lineWidth: MeeshyBorder.strong)"), "l'anneau blanc reste")
+        XCTAssertTrue(capsule.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(capsule.contains(".accessibilityElement(children: .ignore)"))
+        XCTAssertTrue(capsule.contains(".modifier(CallTopBannerHeightReporter(banner: .capture))"), "la pile mesure toujours sa hauteur")
+    }
+
+    /// R1.6 — au premier toucher, la puce sort par le haut AVEC les bannières (loi 11) et revient
+    /// au second ; « Réduire les animations » : un fondu. Sa minuterie de 5 s court pendant qu'elle
+    /// est rangée : la ranger ne la prolonge pas.
+    func test_captureChip_stowsByTheTopEdge_withTheBanners() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let capture = try XCTUnwrap(stack.range(of: "case .capture:").map { String(stack[$0.upperBound...]) })
+        let branch = try XCTUnwrap(capture.components(separatedBy: "case .liveFrame:").first)
+        XCTAssertTrue(branch.contains("CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)"), "rien ne change de ce qui la nourrit")
+        XCTAssertTrue(branch.contains(".modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.captureAlert), reduceMotion: reduceMotion))"))
+        XCTAssertTrue(branch.contains(".callChromeVisibility(chrome.isVisible(.captureAlert))"))
+    }
+}
+
+/// P11.1 (#18206) — en groupe, l'en-tête FLOTTE sur la grille : en portrait, la grille part du haut
+/// de la zone sûre et Réduire · Image dans l'image · Conversation et la capsule se posent sur les
+/// vignettes du haut, comme la planche P11. La pilule, elle, reste dans le flux (#17949, A) : la
+/// grille se resserre au-dessus d'elle. Ce qui garde sa réserve sous l'en-tête : la hauteur compacte
+/// (L4, #17885 : la rangée de quatre entre l'en-tête et la pilule), la une (P14, sa capsule et la puce
+/// d'écran se posent au haut de sa vignette) et une pile de bandeaux (L4.11, #17833 : la grille ne
+/// passe jamais sous un bandeau).
+@MainActor
+final class CallGroupHeaderFloatTests: XCTestCase {
+
+    func test_headerFloats_overThePortraitGrid() {
+        XCTAssertTrue(CallTopBannerStack.headerFloatsOverGroupStage(isGrid: true, isCompactHeight: false))
+    }
+
+    func test_headerDoesNotFloat_overACompactHeightRow_L4() {
+        XCTAssertFalse(
+            CallTopBannerStack.headerFloatsOverGroupStage(isGrid: true, isCompactHeight: true),
+            "L4 (#17885) : en hauteur compacte, aucune vignette ne passe sous l'en-tête"
+        )
+    }
+
+    func test_headerDoesNotFloat_overTheFeaturedTile_P14() {
+        XCTAssertFalse(
+            CallTopBannerStack.headerFloatsOverGroupStage(isGrid: false, isCompactHeight: false),
+            "P14 : la capsule de la une se pose au haut de sa vignette, jamais sous celle de l'en-tête"
+        )
+    }
+
+    func test_floatingHeader_startsTheGridAtTheSafeArea() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            59 - 8,
+            "après l'espacement de la scène, la grille part de la zone sûre, 8 pt au-dessus de la rangée d'en-tête (planche P11)"
+        )
+    }
+
+    func test_floatingHeader_onAWindowWithoutSafeArea_neverReservesANegativeBand() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 0, chromeTopInset: 8, stageSpacing: 8, headerFloats: true, hasBanners: false, isStageFullScreen: false),
+            0
+        )
+    }
+
+    func test_reservedHeader_keepsTheStageUnderTheHeaderRow() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: false, hasBanners: false, isStageFullScreen: false),
+            67 + 52
+        )
+    }
+
+    func test_aBanner_pushesTheGridUnderTheStack_evenWhenTheHeaderFloats() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: true, isStageFullScreen: false),
+            CallTopBannerStack.topInset(chromeTopInset: 67),
+            "L4.11 (#17833) : la pile se pose sous l'en-tête, la grille lui cède sa place"
+        )
+    }
+
+    /// #18227 — une pastille de service (« En attente », « Vidéo réduite ») est un bandeau de la pile :
+    /// l'en-tête ne flotte plus et la grille lui cède sa place.
+    func test_aServicePill_countsAsABanner_theHeaderStopsFloating() {
+        let present = CallTopBannerStack.present(isScreenShareShown: false, isRecordingShown: false, isCaptureAlertShown: false, isLiveFrameShown: false, service: [.hold])
+        XCTAssertFalse(present.isEmpty)
+        XCTAssertEqual(
+            CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: true, hasBanners: !present.isEmpty, isStageFullScreen: false),
+            CallTopBannerStack.topInset(chromeTopInset: 67)
+        )
+    }
+
+    func test_fullScreenStage_startsAtTheSafeArea_floatingOrNot() {
+        for floats in [true, false] {
+            XCTAssertEqual(
+                CallTopBannerStack.groupStageTopBase(safeAreaTop: 59, chromeTopInset: 67, stageSpacing: 8, headerFloats: floats, hasBanners: false, isStageFullScreen: true),
+                59
+            )
+        }
+    }
+
+    func test_groupStage_floatsTheHeaderFromTheGridFocus_andMovesWithIt() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(
+            layout.contains("headerFloats: CallTopBannerStack.headerFloatsOverGroupStage(isGrid: groupStageFocus == .grid, isCompactHeight: isStageCompactHeight)"),
+            "la loi pure décide, depuis ce qui est à la une et la hauteur de la scène"
+        )
+        XCTAssertFalse(layout.contains("Self.chromeTopInset + 52"), "plus de bande réservée en dur au-dessus de la grille")
+        XCTAssertTrue(layout.contains("safeAreaTop: DeviceLayout.safeAreaTop, chromeTopInset: Self.chromeTopInset"))
+        let reserve = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
+        XCTAssertTrue(reserve.contains("CallTopBannerStack.groupStageTopBase("))
+        XCTAssertTrue(reserve.contains("hasBanners: !present.isEmpty"), "les pastilles de service comptent : la présence vient de la pile")
+        XCTAssertTrue(reserve.contains("service: service"))
+        XCTAssertTrue(
+            reserve.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: base)"),
+            "grille ↔ une : la scène glisse sous l'en-tête, jamais d'un coup ; Réduire les animations : un fondu court"
+        )
+    }
 }

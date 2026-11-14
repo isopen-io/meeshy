@@ -464,6 +464,21 @@ describe('POST /communities — avatar (#16788)', () => {
     await app.close();
   });
 
+  it("refuse un avatar servi par un hôte tiers en 400 IDENTITY_IMAGE_NOT_OWNED sans rien créer (#16809)", async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: 'https://tracker.example/pixel.png' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+    expect(prisma.community.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it.each([
     'javascript:alert(1)',
     'data:image/png;base64,iVBORw0KGgo=',

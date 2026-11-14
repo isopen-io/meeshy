@@ -1,7 +1,7 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   PREVIEW_MEDIA_ATTACHMENT_SELECT,
@@ -447,30 +447,38 @@ export async function emitConversationPreviewUpdate(
       ),
     );
 
-    for (const { room, participant } of participantUserRoomTargets(served)) {
-      // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
-      // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
-      // droit de lire. Rien plutôt que l'interdit — sa ligne garde l'état que
-      // le REST lui a servi sous la même borne.
-      const floor = floorByParticipant.get(participant.id) ?? null;
-      const latestBelowFloor = floor !== null && latest !== null && latest.createdAt < floor;
-      if (latestBelowFloor && !overrides.has(participant.id)) continue;
+    // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Les deux `continue`
+    // deviennent un `null` rendu : le site unique les traite comme « rien à
+    // envoyer à celui-ci », ce qu'ils ont toujours voulu dire.
+    emitConversationUpdatedPerReader(
+      io,
+      participantUserRoomTargets(served),
+      (participant) => {
+        // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
+        // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
+        // droit de lire. Rien plutôt que l'interdit — sa ligne garde l'état que
+        // le REST lui a servi sous la même borne.
+        const floor = floorByParticipant.get(participant.id) ?? null;
+        const latestBelowFloor = floor !== null && latest !== null && latest.createdAt < floor;
+        if (latestBelowFloor && !overrides.has(participant.id)) return null;
 
-      // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
-      // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
-      // l'aperçu global rendrait exactement à l'envers.
-      const own = ownMessageOf(participant.id);
-      const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
-        viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
-        quotedDeathAt: own ? quotedDeathFor(quotedDeaths.get(own.id), participant) : null,
-      });
-      if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) continue;
-      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-        ...basePayload,
-        ...messagePayloadFor(own),
-        ...group,
-      });
-    }
+        // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
+        // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
+        // l'aperçu global rendrait exactement à l'envers.
+        const own = ownMessageOf(participant.id);
+        const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
+          viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
+          quotedDeathAt: own ? quotedDeathFor(quotedDeaths.get(own.id), participant) : null,
+        });
+        if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) return null;
+        return {
+          ...basePayload,
+          ...messagePayloadFor(own),
+          ...group,
+        };
+      },
+      (error) => onError?.(error),
+    );
   } catch (error) {
     onError?.(error);
   }

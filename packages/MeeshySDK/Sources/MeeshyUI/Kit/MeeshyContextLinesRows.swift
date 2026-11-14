@@ -2,155 +2,238 @@ import SwiftUI
 
 // MARK: - Ligne de références
 
-/// Largeurs mesurées séparément : celle du contenu, celle de la place offerte.
-struct MeeshyContextContentWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-struct MeeshyContextAvailableWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 /// La ligne de références : une rangée de segments séparés par « · », chacun
-/// bouton de SA feuille. Absente si vide ; elle défile quand elle déborde, et
-/// l'estompe ne paraît que dans ce cas.
-public struct MeeshyContextReferenceLine: View {
-    public let label: String
-    public let references: [MeeshyContextReference]
-    public let alignment: MeeshyContextAlignment
-    public let surface: MeeshyContextSurface
-    public let tint: Color?
+/// bouton de SA feuille ; ni fond, ni capsule. Absente si vide. Tout tient :
+/// elle est posée selon `alignment`, sans estompe. Elle déborde : elle défile,
+/// et ses bords s'estompent par la loi de K04 (`MeeshyFadingScrollView`).
+/// `Equatable` sur les valeurs (les actions n'y comptent que par leur présence).
+public struct MeeshyContextReferenceLine: View, Equatable {
+    private let label: String
+    private let visible: [MeeshyContextReference]
+    private let alignment: MeeshyContextAlignment
+    private let surface: MeeshyContextSurface
+    private let tint: Color?
+    private let haptic: MeeshyContextHaptic
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var contentWidth: CGFloat = 0
-    @State private var availableWidth: CGFloat = 0
+    @Environment(\.isEnabled) private var isEnabled
 
     public init(
         label: String,
         references: [MeeshyContextReference],
         alignment: MeeshyContextAlignment = .center,
         surface: MeeshyContextSurface = .media,
-        tint: Color? = nil
+        tint: Color? = nil,
+        haptic: MeeshyContextHaptic = .light
     ) {
+        assert(!label.isEmpty, "MeeshyContextReferenceLine : le nom accessible est obligatoire")
         self.label = label
-        self.references = references
+        self.visible = MeeshyContextLinesRule.visibleItems(references, text: \.text)
         self.alignment = alignment
         self.surface = surface
         self.tint = tint
+        self.haptic = haptic
     }
 
     public var body: some View {
-        let visible = MeeshyContextLinesRule.visibleItems(references, text: \.text)
         if !visible.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    ForEach(visible.indices, id: \.self) { index in
-                        if index > 0 {
-                            Text("·").accessibilityHidden(true)
-                        }
-                        segment(visible[index])
-                    }
-                }
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundStyle(ink)
-                .padding(.horizontal, MeeshySpacing.md)
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: MeeshyContextContentWidthKey.self, value: proxy.size.width)
-                    }
-                )
+            ViewThatFits(in: .horizontal) {
+                row.frame(maxWidth: .infinity, alignment: alignment == .center ? .center : .leading)
+                MeeshyFadingScrollView(axis: .horizontal, fade: MeeshyContextLinesRecipe.fadeWidth) { row }
             }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: MeeshyContextAvailableWidthKey.self, value: proxy.size.width)
-                }
-            )
-            .onPreferenceChange(MeeshyContextContentWidthKey.self) { contentWidth = $0 }
-            .onPreferenceChange(MeeshyContextAvailableWidthKey.self) { availableWidth = $0 }
-            .mask(edgeMask)
+            .opacity(isEnabled ? 1 : MeeshyContextLinesRecipe.disabledOpacity)
+            .dynamicTypeSize(...MeeshyContextLinesRecipe.maxDynamicTypeSize)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(label)
         }
     }
 
-    private var ink: Color {
-        if let tint { return tint }
-        return surface == .media ? MeeshyColors.onMediaSecondary : MeeshyColors.textSecondary(isDark: colorScheme == .dark)
+    private var row: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            ForEach(Array(visible.enumerated()), id: \.element.id) { index, reference in
+                if index > 0 {
+                    Text(verbatim: "·")
+                        .foregroundStyle(separatorInk)
+                        .accessibilityHidden(true)
+                }
+                segment(reference)
+            }
+        }
+        .font(MeeshyFont.relative(MeeshyContextLinesRecipe.referenceTextSize, weight: .semibold))
+        .foregroundStyle(textInk)
+        .fixedSize()
     }
 
-    @ViewBuilder
     private func segment(_ reference: MeeshyContextReference) -> some View {
-        let content = HStack(spacing: MeeshySpacing.xsPlus) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             if let systemImage = reference.systemImage {
-                Image(systemName: systemImage)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .accessibilityHidden(true)
+                Image(systemName: systemImage).accessibilityHidden(true)
             }
             Text(reference.text).lineLimit(1)
         }
-        if let action = reference.action {
-            Button {
-                action()
-            } label: {
-                content
-            }
-            .buttonStyle(MeeshyContextPressStyle())
-            .accessibilityLabel(reference.spokenLabel)
-            .accessibilityHint(reference.hint ?? "")
-            .accessibilityAddTraits(.isButton)
-        } else {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(reference.spokenLabel)
-        }
+        .contentShape(MeeshyContextHitShape(edge: .bottom))
+        .modifier(MeeshyContextGesture(
+            label: reference.spokenLabel, hint: reference.hint, haptic: haptic, fades: true,
+            longPressLabel: nil, action: reference.action, onLongPress: nil
+        ))
     }
 
-    /// L'estompe ne se pose que si le contenu déborde : sinon, un masque plein.
-    private var edgeMask: some View {
-        let fades = MeeshyContextLinesRule.needsFade(contentWidth: contentWidth, available: availableWidth)
-        return LinearGradient(
-            stops: fades
-                ? [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black, location: 0.12),
-                    .init(color: .black, location: 0.88),
-                    .init(color: .clear, location: 1),
-                ]
-                : [.init(color: .black, location: 0), .init(color: .black, location: 1)],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+    private var baseInk: Color {
+        if let tint { return tint }
+        return surface == .media ? MeeshyColors.onMedia : MeeshyColors.textPrimary(isDark: colorScheme == .dark)
+    }
+
+    private var textInk: Color {
+        if tint == nil, surface == .media { return MeeshyColors.onMediaSecondary }
+        return baseInk.opacity(MeeshyContextLinesRecipe.textOpacity)
+    }
+
+    private var separatorInk: Color {
+        if tint == nil, surface == .media { return MeeshyColors.onMediaMuted }
+        return baseInk.opacity(MeeshyContextLinesRecipe.waveOpacity)
+    }
+
+    public static func == (lhs: MeeshyContextReferenceLine, rhs: MeeshyContextReferenceLine) -> Bool {
+        lhs.label == rhs.label && lhs.visible == rhs.visible && lhs.alignment == rhs.alignment
+            && lhs.surface == rhs.surface && lhs.tint == rhs.tint && lhs.haptic == rhs.haptic
     }
 }
 
 // MARK: - Puce
 
-/// La puce : un verre posé sur le contenu (glyphe, valeur, détail, chevron).
-/// Le verre vient de K01 ; K24 ne le dessine pas. Un seul élément dit
-/// « nom, valeur » ; sans action, elle n'est qu'un texte.
-public struct MeeshyContextChip: View {
-    public let label: String
-    public let title: String
-    public let systemImage: String?
-    public let detail: String?
-    public let showsChevron: Bool?
-    public let isExpanded: Bool?
-    public let tone: MeeshyGlassTone?
-    public let updatesFrequently: Bool
-    public let isPressed: Bool?
-    public let hint: String?
-    public let tint: Color?
-    public let action: (() -> Void)?
+/// Les VALEURS de la puce : ce que `==` compare.
+struct MeeshyContextChipSpec: Equatable {
+    let label: String
+    let title: String?
+    let systemImage: String?
+    let detail: String?
+    let showsChevron: Bool
+    let isExpanded: Bool?
+    let tone: MeeshyGlassTone?
+    let glassTint: Color?
+    let tint: Color?
+    let updatesFrequently: Bool
+    let isPressed: Bool?
+    let hint: String?
+    let haptic: MeeshyContextHaptic
+    let longPressLabel: String?
+    let hasAction: Bool
+    let hasLongPress: Bool
+    let isVisible: Bool
+}
 
-    public init(
+/// La puce : un verre posé sur le contenu (glyphe ou `leading`, valeur,
+/// détail, chevron). Le verre vient de K01, interactif quand elle se touche ;
+/// K24 ne le dessine pas. Le lecteur d'écran dit « nom, valeur », le nom ne
+/// s'échange jamais contre la valeur. Un libellé qui ne tient pas laisse un
+/// disque à glyphe. `Equatable` sur les valeurs.
+public struct MeeshyContextChip<Leading: View>: View {
+    private let spec: MeeshyContextChipSpec
+    private let leading: Leading?
+    private let action: (() -> Void)?
+    private let onLongPress: (() -> Void)?
+
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyGlassTone) private var hostTone
+
+    init(spec: MeeshyContextChipSpec, leading: Leading?, action: (() -> Void)?, onLongPress: (() -> Void)?) {
+        assert(!spec.label.isEmpty, "MeeshyContextChip : le nom accessible est obligatoire")
+        self.spec = spec
+        self.leading = leading
+        self.action = action
+        self.onLongPress = onLongPress
+    }
+
+    public var body: some View {
+        if spec.isVisible {
+            fitted
+                .modifier(MeeshyContextGesture(
+                    label: spec.label, hint: spec.hint, haptic: spec.haptic, fades: false,
+                    longPressLabel: spec.longPressLabel, action: action, onLongPress: onLongPress
+                ))
+                .accessibilityValue(MeeshyContextLinesRule.chipValue(title: spec.title ?? "", detail: spec.detail))
+                .accessibilityAddTraits(traits)
+                .opacity(isEnabled ? 1 : MeeshyContextLinesRecipe.disabledOpacity)
+                .dynamicTypeSize(...MeeshyContextLinesRecipe.maxDynamicTypeSize)
+        }
+    }
+
+    private var traits: AccessibilityTraits {
+        var result: AccessibilityTraits = []
+        if spec.updatesFrequently { result.formUnion(.updatesFrequently) }
+        if spec.isExpanded == true { result.formUnion(.isSelected) }
+        return result
+    }
+
+    private var hasGlyph: Bool { leading != nil || spec.systemImage != nil }
+
+    private var fitted: some View {
+        ViewThatFits(in: .horizontal) {
+            pill
+            if hasGlyph { disc }
+        }
+    }
+
+    private var pill: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            glyph
+            if let title = spec.title {
+                Text(title).lineLimit(1)
+            }
+            if let detail = spec.detail {
+                Text(detail)
+                    .monospacedDigit()
+                    .fixedSize()
+                    .opacity(MeeshyContextLinesRule.chipDetailOpacity(tone: resolvedTone))
+            }
+            if spec.showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(MeeshyFont.relative(MeeshyContextLinesRecipe.chevronSize, weight: .semibold))
+                    .rotationEffect(.degrees(spec.isExpanded == true ? 180 : 0))
+                    .meeshyAnimation(.easeOut(duration: MeeshyContextLinesRecipe.fadeDuration), value: spec.isExpanded)
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(MeeshyFont.relative(MeeshyContextLinesRecipe.chipTextSize, weight: .semibold))
+        .foregroundStyle(ink)
+        .padding(.horizontal, MeeshySpacing.md)
+        .frame(height: MeeshyContextLinesRecipe.chipHeight)
+        .meeshyGlass(in: Capsule(), tone: spec.tone, tint: spec.glassTint, isInteractive: spec.hasAction, isPressed: spec.isPressed)
+        .contentShape(MeeshyContextHitShape(edge: .vertical))
+    }
+
+    private var disc: some View {
+        glyph
+            .foregroundStyle(ink)
+            .frame(width: MeeshyContextLinesRecipe.chipHeight, height: MeeshyContextLinesRecipe.chipHeight)
+            .meeshyGlass(in: Circle(), tone: spec.tone, tint: spec.glassTint, isInteractive: spec.hasAction, isPressed: spec.isPressed)
+            .contentShape(MeeshyContextHitShape(edge: .vertical))
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if let leading {
+            leading.accessibilityHidden(true)
+        } else if let systemImage = spec.systemImage {
+            Image(systemName: systemImage)
+                .font(MeeshyFont.relative(MeeshyContextLinesRecipe.chipGlyphSize, weight: .semibold))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var resolvedTone: MeeshyGlassTone { spec.tone ?? hostTone }
+
+    /// L'encre : `tint` la remplace ; sinon celle du thème sous le ton `theme`,
+    /// celle des médias sous les trois tons de la planche.
+    private var ink: Color {
+        if let tint = spec.tint { return tint }
+        return resolvedTone == .theme ? MeeshyColors.textPrimary(isDark: colorScheme == .dark) : MeeshyColors.onMedia
+    }
+}
+
+public extension MeeshyContextChip where Leading == MeeshyContextNoLeading {
+    init(
         label: String,
         title: String,
         systemImage: String? = nil,
@@ -158,93 +241,69 @@ public struct MeeshyContextChip: View {
         showsChevron: Bool? = nil,
         isExpanded: Bool? = nil,
         tone: MeeshyGlassTone? = nil,
+        glassTint: Color? = nil,
+        tint: Color? = nil,
         updatesFrequently: Bool = false,
         isPressed: Bool? = nil,
         hint: String? = nil,
-        tint: Color? = nil,
+        haptic: MeeshyContextHaptic = .light,
+        onLongPress: (() -> Void)? = nil,
+        longPressLabel: String? = nil,
         action: (() -> Void)? = nil
     ) {
-        self.label = label
-        self.title = title
-        self.systemImage = systemImage
-        self.detail = detail
-        self.showsChevron = showsChevron
-        self.isExpanded = isExpanded
-        self.tone = tone
-        self.updatesFrequently = updatesFrequently
-        self.isPressed = isPressed
-        self.hint = hint
-        self.tint = tint
-        self.action = action
+        self.init(
+            spec: MeeshyContextChipSpec(
+                label: label, title: MeeshyContextLinesRule.visibleText(title), systemImage: systemImage,
+                detail: MeeshyContextLinesRule.visibleText(detail),
+                showsChevron: MeeshyContextLinesRule.showsChevron(hasAction: action != nil, requested: showsChevron),
+                isExpanded: isExpanded, tone: tone, glassTint: glassTint, tint: tint,
+                updatesFrequently: updatesFrequently, isPressed: isPressed, hint: hint, haptic: haptic,
+                longPressLabel: longPressLabel, hasAction: action != nil, hasLongPress: onLongPress != nil,
+                isVisible: MeeshyContextLinesRule.showsChip(title: title, glyph: systemImage)
+            ),
+            leading: nil, action: action, onLongPress: onLongPress
+        )
     }
+}
 
-    public var body: some View {
-        if MeeshyContextLinesRule.showsChip(title: title, glyph: systemImage) {
-            tappable(pill)
-        }
+public extension MeeshyContextChip {
+    /// `leading` remplace le glyphe (point rouge du chrono, émoji d'un cercle,
+    /// drapeau) : la puce est alors toujours dessinée.
+    init(
+        label: String,
+        title: String,
+        detail: String? = nil,
+        showsChevron: Bool? = nil,
+        isExpanded: Bool? = nil,
+        tone: MeeshyGlassTone? = nil,
+        glassTint: Color? = nil,
+        tint: Color? = nil,
+        updatesFrequently: Bool = false,
+        isPressed: Bool? = nil,
+        hint: String? = nil,
+        haptic: MeeshyContextHaptic = .light,
+        onLongPress: (() -> Void)? = nil,
+        longPressLabel: String? = nil,
+        action: (() -> Void)? = nil,
+        @ViewBuilder leading: () -> Leading
+    ) {
+        self.init(
+            spec: MeeshyContextChipSpec(
+                label: label, title: MeeshyContextLinesRule.visibleText(title), systemImage: nil,
+                detail: MeeshyContextLinesRule.visibleText(detail),
+                showsChevron: MeeshyContextLinesRule.showsChevron(hasAction: action != nil, requested: showsChevron),
+                isExpanded: isExpanded, tone: tone, glassTint: glassTint, tint: tint,
+                updatesFrequently: updatesFrequently, isPressed: isPressed, hint: hint, haptic: haptic,
+                longPressLabel: longPressLabel, hasAction: action != nil, hasLongPress: onLongPress != nil,
+                isVisible: true
+            ),
+            leading: leading(), action: action, onLongPress: onLongPress
+        )
     }
+}
 
-    private var hasChevron: Bool {
-        MeeshyContextLinesRule.showsChevron(hasAction: action != nil, requested: showsChevron)
-    }
-
-    private var valueText: String {
-        [title, detail ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
-    }
-
-    private var pill: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .accessibilityHidden(true)
-            }
-            if !title.isEmpty {
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .lineLimit(1)
-            }
-            if let detail, !detail.isEmpty {
-                Text(detail)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .monospacedDigit()
-                    .fixedSize()
-            }
-            if hasChevron {
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .rotationEffect(.degrees(isExpanded == true ? -90 : 0))
-                    .accessibilityHidden(true)
-            }
-        }
-        .foregroundStyle(tint ?? MeeshyColors.onMedia)
-        .padding(.horizontal, MeeshySpacing.md)
-        .frame(height: MeeshyContextLinesRecipe.chipHeight)
-        .meeshyGlass(in: Capsule(), tone: tone, tint: tint, isInteractive: action != nil, isPressed: isPressed)
-        .contentShape(Capsule())
-    }
-
-    @ViewBuilder
-    private func tappable<Content: View>(_ content: Content) -> some View {
-        if let action {
-            Button {
-                HapticFeedback.light()
-                action()
-            } label: {
-                content
-            }
-            .buttonStyle(MeeshyContextPressStyle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(label)
-            .accessibilityValue(valueText)
-            .accessibilityHint(hint ?? "")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(updatesFrequently ? .updatesFrequently : .isButton)
-        } else {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(label)
-                .accessibilityValue(valueText)
-        }
+extension MeeshyContextChip: Equatable where Leading: Equatable {
+    public static func == (lhs: MeeshyContextChip, rhs: MeeshyContextChip) -> Bool {
+        lhs.spec == rhs.spec && lhs.leading == rhs.leading
     }
 }

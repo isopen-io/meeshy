@@ -193,8 +193,8 @@ describe('CallScreen — la scène d’un groupe (#17699)', () => {
     featured();
     expect(chrome()).toBe('hidden');
     expect(spotlight()).toBe('u-b');
-    const capsule = view.find('[data-call-spotlight-capsule]')?.closest('[data-call-chrome-fade]');
-    expect(capsule?.hasAttribute('data-call-chrome-keep')).toBe(false);
+    const capsule = view.find('[data-call-spotlight-capsule]')?.closest('[data-call-spotlight-place]');
+    expect(capsule?.hasAttribute('data-call-stowed')).toBe(true);
     featured();
     expect(chrome()).toBe('shown');
     expect(spotlight()).toBe('u-b');
@@ -326,6 +326,79 @@ describe('CallScreen — le plein écran d’un groupe (U2.8, U2.9)', () => {
   });
 });
 
+describe('CallScreen — deux niveaux de plein écran, la capsule et la puce rangées au toucher (U2.2, U2.4, U2.5 ; #17961)', () => {
+  const sharing = { ...peers, 'u-peer': member({ screenSharing: true }) };
+  const strip = (view: View) => view.find('[data-call-strip]:not([data-leaving])');
+  const stowed = (view: View, selector: string) => view.find(selector)?.closest('[data-call-stow]')?.hasAttribute('data-call-stowed') ?? null;
+
+  test('« Plein écran » garde les caméras ; un second appui passe au total, le partage seul ; « Quitter » redescend d’un niveau', () => {
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': liveScreen() } });
+    view.press('[data-call-fullscreen="enter"]');
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    expect(strip(view)).not.toBeNull();
+    view.press('[data-call-fullscreen="total"]');
+    expect(strip(view)).toBeNull();
+    view.press('[data-call-fullscreen="exit-total"]');
+    expect(strip(view)).not.toBeNull();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    view.press('[data-call-fullscreen="exit"]');
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+  });
+
+  test('« Revenir à la grille » sort de tout, même du plein écran total', () => {
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': liveScreen() } });
+    view.press('[data-call-fullscreen="enter"]');
+    view.press('[data-call-fullscreen="total"]');
+    view.press('[data-call-grid-back]');
+    expect(view.find('[data-call-spotlight]')).toBeNull();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+  });
+
+  test('en plein écran, toucher l’écran range la capsule et la puce « Écran de X », le suivant les rend — aux deux niveaux', () => {
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': liveScreen() } });
+    const tapScreen = () => act(() => (view.find('[data-call-shared-screen]') as HTMLElement | null)?.click());
+    view.press('[data-call-fullscreen="enter"]');
+    expect(stowed(view, '[data-call-spotlight-capsule]')).toBe(false);
+    tapScreen();
+    expect(stowed(view, '[data-call-spotlight-capsule]')).toBe(true);
+    expect(stowed(view, '[data-call-screen-banner]')).toBe(true);
+    expect(strip(view)).not.toBeNull();
+    tapScreen();
+    expect(stowed(view, '[data-call-spotlight-capsule]')).toBe(false);
+    expect(stowed(view, '[data-call-screen-banner]')).toBe(false);
+    view.press('[data-call-fullscreen="total"]');
+    tapScreen();
+    expect(stowed(view, '[data-call-spotlight-capsule]')).toBe(true);
+    tapScreen();
+    expect(stowed(view, '[data-call-spotlight-capsule]')).toBe(false);
+    view.done();
+  });
+
+  test('une caméra à la une n’a qu’un niveau : « Plein écran » garde les autres, sans plein écran total', () => {
+    const view = mount({ members: peers });
+    view.press('[data-call-tile="u-b"]');
+    view.press('[data-call-fullscreen="enter"]');
+    expect(strip(view)).not.toBeNull();
+    expect(view.find('[data-call-fullscreen="total"]')).toBeNull();
+    expect(view.find('[data-call-fullscreen="exit"]')).not.toBeNull();
+    view.done();
+  });
+});
+
+describe('CallScreen — un partage qui commence prend la une, même après un choix manuel (U2.1, #18180)', () => {
+  test('Bintou mise à la une à la main, Amina commence à partager : son écran prend la une', () => {
+    const view = mount({ members: peers });
+    view.press('[data-call-tile="u-b"]');
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-b');
+    act(() => view.rerender({ members: { ...peers, 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': liveScreen() } }));
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-peer');
+    expect(view.find('[data-call-shared-screen]')).not.toBeNull();
+    view.done();
+  });
+});
+
 describe('CallScreen — la rangée de pastilles sort par le haut en plein écran, sans être démontée (U2.10)', () => {
   test('en plein écran la rangée reste montée, rangée vers le bord haut avec l’en-tête (le fondu court sous Réduire les animations est celui de tout le chrome) ; quitter la rend', () => {
     const view = mount({ members: { ...peers, 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': liveScreen() } });
@@ -335,7 +408,7 @@ describe('CallScreen — la rangée de pastilles sort par le haut en plein écra
     view.press('[data-call-fullscreen]');
     expect(host()?.getAttribute('aria-hidden')).toBe('true');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    view.press('[data-call-fullscreen]');
+    view.press('[data-call-fullscreen="exit"]');
     expect(host()?.getAttribute('aria-hidden')).toBeNull();
     view.done();
   });

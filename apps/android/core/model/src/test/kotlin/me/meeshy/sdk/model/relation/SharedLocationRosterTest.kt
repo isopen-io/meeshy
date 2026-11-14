@@ -71,4 +71,45 @@ class SharedLocationRosterTest {
         assertThat(union.entry(bob)).isNotNull()
         assertThat(union.entry(alice)).isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.EXACT, 8 * hour))
     }
+
+    @Test
+    fun `un retrait en attente ne garde que l'identifiant jusqu'au plus long terme serveur et se relit`() {
+        val roster = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+            .withdrawing(alice, nowMillis = 0L)
+
+        assertThat(roster.entry(alice)).isNull()
+        assertThat(roster.hasRecipients).isFalse()
+        assertThat(roster.isEmpty).isFalse()
+        assertThat(roster.isSettled(nowMillis = 0L)).isFalse()
+        assertThat(roster.pruned(nowMillis = 8 * hour).isEmpty).isTrue()
+        assertThat(roster.stored()).doesNotContain("exact")
+        assertThat(SharedLocationRoster.fromStored(roster.stored())).isEqualTo(roster)
+    }
+
+    @Test
+    fun `partager de nouveau efface le retrait et la liste envoyee les solde tous`() {
+        val roster = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+            .withdrawing(alice, nowMillis = 0L)
+            .withdrawing(bob, nowMillis = 0L)
+            .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+
+        assertThat(roster.isWithdrawalPending(alice)).isFalse()
+        assertThat(roster.isWithdrawalPending(bob)).isTrue()
+        assertThat(roster.settled().hasPendingWithdrawals).isFalse()
+        assertThat(roster.settled().entry(alice)).isNotNull()
+        assertThat(roster.withdrawing("cccccccccccccccccccccccc", nowMillis = 0L)).isEqualTo(roster)
+    }
+
+    @Test
+    fun `une liste gardee avant les retraits en attente se relit sans retrait`() {
+        val legacy = """{"entries":{"$alice":{"precision":"city","untilMillis":42}}}"""
+
+        val roster = SharedLocationRoster.fromStored(legacy)
+
+        assertThat(roster.entry(alice)).isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.CITY, 42L))
+        assertThat(roster.hasPendingWithdrawals).isFalse()
+    }
 }

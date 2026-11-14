@@ -393,6 +393,17 @@ Rien n'est retiré : trois de ces noms sont probablement des features à venir, 
 peut-être pas écrit. Chacun demande un verdict, pas un retrait automatique —
 c'est #18342.
 
+**La question est désormais posée MÉCANIQUEMENT** (`socket-event-orphan-gate`) :
+les sept sont inventoriés avec ce que la mesure dit de leur émetteur, sans
+verdict, et un HUITIÈME rougit chez celui qui l'écrit. Le cliquet à deux sens
+fait sortir de la table tout nom qui trouve un lecteur.
+
+Un détail de méthode qui a failli coûter une garde qui crie à tort : **le
+balayage littéral seul se trompe**. Le web écoute `friend-request:accepted` par
+`SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED`, sans jamais épeler le nom — la lecture
+résout donc les constantes des deux cartes partagées et du miroir Kotlin. Mesuré
+avant d'écrire la garde, pas après l'avoir vue rougir à tort.
+
 ---
 
 ## Pourquoi #18120 n'est pas corrigé par ce cycle

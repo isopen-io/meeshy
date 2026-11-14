@@ -121,8 +121,9 @@ struct OnboardingOverlay: View {
         HapticFeedback.success()
         flightArrived = false
         flight = reward
-        let travel = reduceMotion ? Animation.easeOut(duration: 1.2).delay(0.6) : .spring(response: 0.9, dampingFraction: 0.82).delay(0.15)
-        withAnimation(travel) { flightArrived = true }
+        meeshyWithAnimation(.spring(response: 0.9, dampingFraction: 0.82).delay(0.15),
+                            reduced: .easeOut(duration: 1.2).delay(0.6),
+                            reduceMotion: reduceMotion) { flightArrived = true }
         delays.run(after: .seconds(reduceMotion ? 1.9 : 0.85)) {
             if !reduceMotion {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { pillBump = true }

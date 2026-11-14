@@ -12,13 +12,13 @@ extension CallView {
     var isMyImageFullScreen: Bool {
         CallCameraRail.isMyImageFullScreen(
             isGroupStage: isGroupStage,
-            isSelfFeatured: isSelfFeatured,
+            isSelfFeatured: GroupCallSpotlight.featuresLocal(groupStageFocus),
             isLocalPrimary: effectiveSwapStreams
         )
     }
 
     /// La vignette perso du duo porte-t-elle MON image ? Même garde que
-    /// `duoOverlays`, qui la monte.
+    /// `duoSelfView`, qui la monte.
     private var showsMyImageTile: Bool {
         !isGroupStage && callManager.isVideoEnabled && callManager.hasLocalVideoTrack && !isLiveFrameShown
     }

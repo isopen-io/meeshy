@@ -201,7 +201,6 @@ function season(view: EngagementWithGame): ConceptState | null {
   return said(gameText('game.state.season.progress', {
     ...where,
     steps: count(served.steps),
-    stars: translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', served.starsToNext),
   }), 'season', 'season_week', 'season_steps', 'season_next');
 }
 

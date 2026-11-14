@@ -17,7 +17,7 @@ import { useGameSettings } from '@/lib/game/use-game-settings';
 import { tierTint } from '@/lib/game/tier-emblem';
 import { loadGameScreenCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, rankLabel, standingLabel } from '@/lib/view/game-copy';
+import { formatCount, standingLabel } from '@/lib/view/game-copy';
 import {
   bannerShortCount,
   isLargeText,
@@ -34,6 +34,7 @@ import { Link } from '@/routes/route-table';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 import { Flame } from './game/flame';
+import { SPARK_GLYPH } from './game-profile-banner';
 import { GameEffectLayer } from './game/game-effect-layer';
 import { LeagueGem } from './game/league-gem';
 import { LevelRing } from './game/level-ring';
@@ -160,7 +161,6 @@ function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBann
   const { points } = model;
   const fill = Math.min(1, Math.max(0, Number.isFinite(level.progress) ? level.progress : 0));
   const score = useRollingNumber(points ?? 0, roll);
-  const missing = useRollingNumber(level.pointsToNext ?? 0, roll);
   return (
     <span
       aria-hidden="true"
@@ -170,17 +170,14 @@ function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBann
     >
       {points === null ? null : (
         <span className="truncate text-check font-bold tabular-nums" style={{ color: INK }}>
-          {translateGame(language, 'game.banner.points', { points: formatCount(score, language) })}
+          {SPARK_GLYPH}
+          {'\u00a0'}
+          {formatCount(score, language)}
         </span>
       )}
       <span className="relative block h-1.5 w-full overflow-hidden rounded-chip" style={{ backgroundColor: `color-mix(in srgb, ${INK} 12%, transparent)` }}>
         <span className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: tint }} />
       </span>
-      {level.pointsToNext === null ? null : (
-        <span data-player-banner-missing={level.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-          {translateGame(language, 'game.banner.level_short', { n: bannerShortCount(missing, language), level: formatCount(level.nextLevel ?? level.level + 1, language) })}
-        </span>
-      )}
     </span>
   );
 }
@@ -194,18 +191,17 @@ function Piece({ name, value, children }: { readonly name: string; readonly valu
 }
 
 /**
- * Le nom du rang au-dessus de sa jauge de Gloire, et dessous la forme courte « 5 543 vers Passeur II » — ou « Gloire N »,
- * sans suite. Le chiffre est compact dès 10 000 (`bannerShortCount`) ; le nom accessible garde la phrase complète.
+ * Le nom du rang, entier, au-dessus de sa jauge de Gloire — ou « Gloire N » au sommet. Le reste à gagner a quitté
+ * l'œil (règle 5 : il se tronquait) ; le nom accessible garde la phrase complète, et la Progression la montre.
  */
 function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly roll: RollEnv | undefined }) {
   const language = currentInterfaceLanguage();
-  const missing = useRollingNumber(rank.gloryMissing ?? 0, roll);
   const total = useRollingNumber(rank.glory, roll);
   const fill = Math.min(1, Math.max(0, Number.isFinite(rank.progress) ? rank.progress : 0));
   const next = rank.next === null || rank.gloryMissing === null ? null : rank.next;
   return (
     <span data-player-banner-rank-gauge="" className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 leading-tight">
-      <span data-player-banner-rank-name="" className="truncate text-check font-bold" style={{ color: INK }}>
+      <span data-player-banner-rank-name="" className="text-check font-bold [overflow-wrap:anywhere]" style={{ color: INK }}>
         {standingLabel(rank, language)}
       </span>
       {next === null ? (
@@ -213,14 +209,9 @@ function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly r
           {translateGame(language, 'game.banner.glory_top', { n: bannerShortCount(total, language) })}
         </span>
       ) : (
-        <>
-          <span className="relative block h-1.5 w-full overflow-hidden rounded-chip" style={{ backgroundColor: `color-mix(in srgb, ${INK} 12%, transparent)` }}>
-            <span data-player-banner-rank-fill="" className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: GLORY }} />
-          </span>
-          <span data-player-banner-rank-missing="" className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-            {translateGame(language, 'game.banner.glory_short', { n: bannerShortCount(missing, language), rank: rankLabel(next.rank, next.division, language) })}
-          </span>
-        </>
+        <span className="relative block h-1.5 w-full overflow-hidden rounded-chip" style={{ backgroundColor: `color-mix(in srgb, ${INK} 12%, transparent)` }}>
+          <span data-player-banner-rank-fill="" className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: GLORY }} />
+        </span>
       )}
     </span>
   );

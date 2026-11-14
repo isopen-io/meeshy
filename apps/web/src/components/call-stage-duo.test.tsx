@@ -88,7 +88,7 @@ function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = t
     column: () => null,
     topInset,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} bleedEnd={bleedEnd} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} bleedEnd={bleedEnd} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */

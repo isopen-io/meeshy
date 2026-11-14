@@ -590,6 +590,9 @@ export function LanguagesSection({
   const codes: Readonly<Record<PrismRank, string | null>> = { systemLanguage, regionalLanguage, customDestinationLanguage };
   return (
     <Section id="profile-languages" title={translate(language, 'profile.section.languages')} glyph="globe">
+      <p data-profile-languages-intro className="px-3.5 pt-2.5 text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'profile.language.intro')}
+      </p>
       <ol className="grid">
         {PRISM_RANKS.map(({ rank, title, clear }) => {
           const code = codes[rank];
@@ -608,11 +611,6 @@ export function LanguagesSection({
                   <span className="text-body font-medium" style={{ color: INK }}>
                     {translate(language, title)}
                   </span>
-                  {rank === 'systemLanguage' && code !== null ? (
-                    <span className="text-caption" style={{ color: INK_2 }}>
-                      {translate(language, 'profile.language.primary.subtitle')}
-                    </span>
-                  ) : null}
                 </span>
                 {code === null || info === null ? (
                   <span className="shrink-0 text-caption font-medium" style={{ color: INK_2 }}>
