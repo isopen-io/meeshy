@@ -140,6 +140,24 @@ export function buildCursorFreshnessGuard(params: {
   };
 }
 
+/**
+ * Ce qu'un appelant de `markMessagesAsReceived` peut SAVOIR en plus du curseur
+ * (#18614).
+ *
+ * `messageIds` nomme les messages RÉELLEMENT remis, quand l'appelant en a la
+ * liste exacte. Le rejeu hors ligne est le seul dans ce cas : il refuse des
+ * entrées (émission qui lève, plancher d'historique, message mort) et la file
+ * en évince d'autres à son plafond, si bien que ce qui est parti est un
+ * sous-ensemble STRICT de la fenêtre du curseur.
+ *
+ * Omettre la clé garde la FENÊTRE, qui est la sémantique juste des appelants
+ * en ligne (`receipts.ts`, `messages-list.ts`,
+ * `autoDeliverToOnlineRecipients`) : chez eux, tout ce qui précède EST arrivé.
+ */
+export type MarkReceivedScope = {
+  readonly messageIds?: readonly string[];
+};
+
 export class MessageReadStatusService {
   /**
    * Cache statique pour éviter les appels multiples à markMessagesAsReceived/Read
@@ -492,7 +510,8 @@ export class MessageReadStatusService {
   async markMessagesAsReceived(
     participantId: string,
     conversationId: string,
-    latestMessageId?: string
+    latestMessageId?: string,
+    options?: MarkReceivedScope
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
@@ -582,12 +601,31 @@ export class MessageReadStatusService {
       // RENVOYÉ par `freezeMessageStatus` — pas seulement attendu — est ce que
       // cette méthode rend à son tour : c'est la seule vraie mesure de ce qui a
       // été figé, là où `getUnreadCount` mesurait autre chose.
+      //
+      // #18614 — le PÉRIMÈTRE du gel. Sans `messageIds`, `freezeMessageStatus`
+      // résout une PLAGE (`createdAt > since`), c'est-à-dire TOUT message non
+      // supprimé de la conversation créé depuis le curseur précédent. C'est la
+      // sémantique juste des quatre appelants qui disent « tout ce qui précède
+      // est arrivé » — un lecteur EN LIGNE, dans le fil.
+      //
+      // Le REJEU hors ligne est le seul à savoir qu'il a livré un sous-ensemble
+      // STRICT de cette fenêtre : une émission qui lève en sort une entrée, et
+      // le plafond de 500 de la file en évince d'autres AVANT même le drain,
+      // sans aucune panne. Sous la plage, ces messages recevaient `deliveredAt`
+      // — en écriture WRITE-ONCE, donc sans retour — et la coche de leur auteur
+      // passait à « remis » pour un message jamais reçu.
+      //
+      // `undefined` vaut « je n'ai pas calculé » et garde la fenêtre ; une
+      // liste VIDE vaut « j'ai livré, et rien ». La distinction est celle de
+      // `bridgeComputed` / `bridgeNotComputed`, un étage plus bas : ne jamais
+      // laisser une IGNORANCE et une AFFIRMATION s'écrire pareil.
       const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
         since: prevDeliveredAt,
         at: now,
         field: "deliveredAt",
+        ...(options?.messageIds ? { messageIds: options.messageIds } : {}),
       });
 
       logger.info(

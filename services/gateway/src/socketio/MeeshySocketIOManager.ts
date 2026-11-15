@@ -1042,9 +1042,26 @@ export class MeeshySocketIOManager {
 
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
+    //
+    // #18614 — et la LISTE de ce qui est parti, à côté du plus récent. Les deux
+    // disent deux choses : le dernier id avance le CURSEUR (monotone, par
+    // conversation), la liste borne le GEL par message. Ne garder que le
+    // premier laissait `freezeMessageStatus` résoudre une PLAGE `createdAt`,
+    // c'est-à-dire estampiller `deliveredAt` sur tout message créé depuis le
+    // curseur précédent — y compris ceux que ce drain vient de REFUSER, et ceux
+    // que le plafond de 500 de la file a évincés sans qu'ils soient jamais
+    // drainés. L'écriture est write-once : rien ne la défait.
+    //
+    // `arrivals` est déjà le bon ensemble : il descend de `delivered`, qui ne
+    // retient que ce qui est RÉELLEMENT parti, et il est cadré par
+    // `announcesMessageArrival` — une mutation rejouée n'attendait aucune coche.
     const convLatest = new Map<string, string>();
+    const convDelivered = new Map<string, string[]>();
     for (const entry of arrivals) {
       convLatest.set(entry.conversationId, entry.messageId);
+      const named = convDelivered.get(entry.conversationId) ?? [];
+      named.push(entry.messageId);
+      convDelivered.set(entry.conversationId, named);
     }
 
     // Batch-resolve ALL active participants for the affected conversations in a
@@ -1085,7 +1102,9 @@ export class MeeshySocketIOManager {
         const latestMessageId = convLatest.get(conversationId);
         if (!latestMessageId) return;
 
-        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId);
+        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId, {
+          messageIds: convDelivered.get(conversationId) ?? [],
+        });
         if (!mayBroadcastReceipt) return;
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);

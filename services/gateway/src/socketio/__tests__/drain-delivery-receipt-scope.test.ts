@@ -78,7 +78,12 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     jest.clearAllMocks();
     ioState = getIoState();
     ioState.to.mockClear();
-    ioState.toEmit.mockClear();
+    // `clearAllMocks` efface les APPELS, pas les IMPLÉMENTATIONS : sans ce
+    // reset, le `mockImplementation` qui fait LEVER l'émission d'un message
+    // dans un témoin survit aux suivants, et ils tombent — ou passent — pour
+    // une raison qui n'est pas la leur. Mesuré dans ce fichier.
+    ioState.toEmit.mockReset();
+    ioState.toEmit.mockImplementation(() => undefined);
     ioState.sockets.sockets.clear();
     ioState.sockets.adapter.rooms.clear();
 
@@ -105,7 +110,25 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
 
     manager = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
     await manager.initialize();
+    // La préférence d'accusé ne gouverne que la DIFFUSION ; l'avancée du
+    // curseur et le gel par message ont lieu dans les deux cas (c'est ce que
+    // `broadcastReadStatus` documente). On la pose pour que le chemin soit
+    // complet et que le témoin ne dépende pas d'un défaut de service.
+    manager.privacyPreferencesService.getPreferencesForUsers = jest.fn(async () =>
+      new Map([['reader', { showReadReceipts: true }]]),
+    ) as any;
   });
+
+  /**
+   * `_emitDeliveryForDrainedMessages` est DÉTACHÉ du drain (`.catch(…)`, jamais
+   * `await`) : le rendre synchrone changerait le chemin de production, donc le
+   * témoin franchit la phase « check » de la boucle d'événements au lieu de le
+   * supposer terminé. Sans cela, l'assertion court avant l'accusé et le témoin
+   * passerait — ou tomberait — pour une raison qui n'est pas la sienne.
+   */
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  };
 
   /**
    * LE témoin du lot. M1 ne part pas (l'émission lève — le cas pour lequel
@@ -124,6 +147,7 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     manager.setDeliveryQueue(queueOf([entry(M1), entry(M2)]));
 
     await manager._drainPendingMessages('reader', false);
+    await flush();
 
     expect(received).toHaveBeenCalledTimes(1);
     const [, , latest, options] = received.mock.calls[0] as any[];
@@ -145,6 +169,7 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     manager.setDeliveryQueue(queueOf([entry(M2)]));
 
     await manager._drainPendingMessages('reader', false);
+    await flush();
 
     const [, , , options] = received.mock.calls[0] as any[];
     expect(options?.messageIds).toEqual([M2]);
@@ -157,6 +182,7 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     manager.setDeliveryQueue(queueOf([entry(M1), entry(M2)]));
 
     await manager._drainPendingMessages('reader', false);
+    await flush();
 
     const [, , latest, options] = received.mock.calls[0] as any[];
     expect(latest).toBe(M2);
@@ -178,6 +204,7 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     ]));
 
     await manager._drainPendingMessages('reader', false);
+    await flush();
 
     const [, , , options] = received.mock.calls[0] as any[];
     expect(options?.messageIds).toEqual([M2]);
