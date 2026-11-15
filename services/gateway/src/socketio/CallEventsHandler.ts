@@ -111,6 +111,7 @@ import type {
   CallMissedEvent,
   CallInitiateAck,
   CallJoinAck,
+  CallSignalAck,
   // CallEndReason imported as value from @meeshy/shared/prisma/client above
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
@@ -2782,15 +2783,39 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (100 req/10s)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.SIGNAL, async (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => {
+    socket.on(CALL_EVENTS.SIGNAL, async (data: CallSignalEvent, ack?: (response: CallSignalAck) => void) => {
+      /**
+       * Un refus de signal se dit DEUX FOIS, et par un SEUL site.
+       *
+       * `call:error` est le canal de diagnostic — diffusé, sans corrélation
+       * avec l'émission qui l'a causé. L'ACQUITTEMENT est le seul signal que
+       * l'appelant qui ATTEND puisse rattacher à son propre envoi, et
+       * `CallSdpSignaler` (iOS) attend : il rejoue l'offre et la réponse en
+       * backoff exponentiel tant que rien ne revient. SEPT sorties de ce
+       * handler ne disaient que la première moitié — la garde de débit et le
+       * `catch` compris — si bien qu'un refus DÉFINITIF se présentait au client
+       * comme une expiration, donc comme une panne de réseau à rejouer
+       * (#18632). Deux autres acquittaient un `{ success: false }` NU, sans le
+       * code qui dit s'il faut rejouer.
+       *
+       * Les deux moitiés vivent ici ENSEMBLE parce qu'une règle qu'il faut
+       * retaper à chaque sortie est une règle qu'une sortie finira par ne pas
+       * avoir : c'est exactement ce qui est arrivé, cinq fois de suite.
+       */
+      const refuse = (code: string, message: string, details?: CallError['details']): void => {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code,
+          message,
+          ...(details ? { details } : {}),
+          callId: data?.callId
+        } as CallError);
+        ack?.({ success: false, error: { code, message } });
+      };
+
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
-          } as CallError);
+          refuse('NOT_AUTHENTICATED', 'User not authenticated');
           return;
         }
 
@@ -2804,7 +2829,15 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        // `checkSocketRateLimit` a DÉJÀ émis `call:error` : seul l'acquittement
+        // manque ici, et c'est lui que l'appelant attend.
+        if (!rateLimitPassed) {
+          ack?.({
+            success: false,
+            error: { code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED, message: 'Rate limit exceeded' }
+          });
+          return;
+        }
 
         // CVE-001 & CVE-006: Validate signal data structure and size
         const validation = validateSocketEvent(socketSignalSchema, data);
@@ -2815,12 +2848,11 @@ export class CallEventsHandler {
             error: validationError,
             details: validationDetails ? { issues: validationDetails } : undefined
           });
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.INVALID_SIGNAL,
-            message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
-          } as CallError);
+          refuse(
+            CALL_ERROR_CODES.INVALID_SIGNAL,
+            validationError,
+            validationDetails ? { issues: validationDetails } : undefined
+          );
           return;
         }
 
@@ -2841,12 +2873,7 @@ export class CallEventsHandler {
             SOCKET_RATE_LIMITS.CALL_ICE_CANDIDATE
           );
           if (!iceAllowed) {
-            socket.emit(CALL_EVENTS.ERROR, {
-              code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
-              message: 'Too many ICE candidates — slow down',
-              callId: data.callId
-            } as CallError);
-            ack?.({ success: false });
+            refuse(CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED, 'Too many ICE candidates — slow down');
             return;
           }
         }
@@ -2883,11 +2910,7 @@ export class CallEventsHandler {
             userId,
             callId: data.callId
           });
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not in this call',
-            callId: data.callId
-          } as CallError);
+          refuse(CALL_ERROR_CODES.NOT_A_PARTICIPANT, 'You are not in this call');
           return;
         }
 
@@ -2898,11 +2921,10 @@ export class CallEventsHandler {
             signalFrom: data.signal.from,
             callId: data.callId
           });
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
-            message: 'Signal sender does not match authenticated user',
-            callId: data.callId
-          } as CallError);
+          refuse(
+            CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
+            'Signal sender does not match authenticated user'
+          );
           return;
         }
 
@@ -2912,11 +2934,7 @@ export class CallEventsHandler {
             callId: data.callId,
             targetId: data.signal.to
           });
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant not found in call',
-            callId: data.callId
-          } as CallError);
+          refuse(CALL_ERROR_CODES.TARGET_NOT_FOUND, 'Target participant not found in call');
           return;
         }
 
@@ -2990,12 +3008,7 @@ export class CallEventsHandler {
               });
             }
           }
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant has no active connection',
-            callId: data.callId
-          } as CallError);
-          ack?.({ success: false });
+          refuse(CALL_ERROR_CODES.TARGET_NOT_FOUND, 'Target participant has no active connection');
           return;
         }
 
@@ -3136,11 +3149,7 @@ export class CallEventsHandler {
       } catch (error) {
         logger.error('❌ Socket: Error forwarding signal', error);
 
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: 'SIGNAL_FAILED',
-          message: 'Failed to forward WebRTC signal',
-          callId: data?.callId
-        } as CallError);
+        refuse('SIGNAL_FAILED', 'Failed to forward WebRTC signal');
       }
     });
 

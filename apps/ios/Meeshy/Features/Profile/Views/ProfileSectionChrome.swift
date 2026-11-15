@@ -100,7 +100,7 @@ struct ProfileNavigationRow: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(title)
         .accessibilityHint(hint ?? "")
         .accessibilityIdentifier(identifier)

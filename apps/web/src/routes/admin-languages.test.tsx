@@ -71,6 +71,12 @@ describe('Langues et traductions — les langues écrites', () => {
     expect(stat(host, 'languages-written')).toContain('Limité aux 10 langues les plus écrites');
   });
 
+  test('l’écran dit d’emblée ce qu’il mesure : les langues écrites, celles qui se traduisent, et leur fiabilité', async () => {
+    const host = await openPanel('/probe', statsGateway().deps);
+
+    expect(host.querySelector('header')?.textContent ?? host.textContent).toContain('Quelles langues s’écrivent sur Meeshy, lesquelles se traduisent, et avec quelle fiabilité.');
+  });
+
   test('les langues sont NOMMÉES dans la langue d’interface — jamais un code', async () => {
     const fr_ = await openPanel('/probe', statsGateway().deps);
     expect(tableRows(fr_, 'languages').map((row) => row[0])).toEqual(['Français', 'Anglais', 'Espagnol']);

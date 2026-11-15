@@ -2,7 +2,7 @@
   "rules": {
     "anyview": 80,
     "app-grdb-import": 0,
-    "async-after": 45,
+    "async-after": 44,
     "autocapitalization": 0,
     "available-floor": 0,
     "coder-strategy": 4,
@@ -18,7 +18,7 @@
     "kit-glass-no-touch": 119,
     "kit-glass-round": 44,
     "logger-subsystem": 0,
-    "motion-literal-spring": 527,
+    "motion-literal-spring": 526,
     "motion-raw-animation": 332,
     "motion-raw-animation-root": 4,
     "motion-reduced-raw-with-animation": 14,

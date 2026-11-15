@@ -7,11 +7,9 @@
  * de leur interprétation.
  */
 const f = {
-  'admin.moderation.subtitle': 'Les contenus et les membres que la communauté a signalés : prenez en charge, décidez, consignez.',
   'admin.moderation.list.caption': 'Liste des signalements',
   'admin.moderation.list.count': '{count} signalement(s)',
   'admin.moderation.list.empty': 'Aucun signalement',
-  'admin.moderation.list.emptyHint': 'Quand un membre signale un contenu ou un compte, il arrive ici.',
   'admin.moderation.list.filteredEmpty': 'Aucun signalement pour ces filtres',
   'admin.moderation.list.onEntity': 'Signalements qui visent un seul élément : retirez le filtre pour revoir toute la file.',
   'admin.moderation.list.onEntityReset': 'Voir toute la file',
@@ -55,7 +53,6 @@ const f = {
   'admin.moderation.fiche.loading': 'Chargement du signalement',
   'admin.moderation.fiche.received': 'Signalé par {reporter} · {when}',
   'admin.moderation.fiche.notFound': 'Ce signalement n’existe plus',
-  'admin.moderation.fiche.notFoundHint': 'Il a peut-être été supprimé par un autre modérateur.',
   'admin.moderation.fiche.back': 'Retour aux signalements',
 
   'admin.moderation.stat.received': 'Reçu',
@@ -93,8 +90,7 @@ const f = {
   'admin.moderation.handling.action': 'Action consignée',
   'admin.moderation.handling.actionNone': 'Aucune action consignée',
   'admin.moderation.handling.actionChoice': 'Action à consigner avec la décision',
-  'admin.moderation.handling.actionHint':
-    'Consignée dans le dossier : ce choix ne déclenche rien par lui-même. Bannir, retirer ou suspendre se fait depuis les fiches liées plus bas.',
+  'admin.moderation.handling.actionHint': 'Ce choix est consigné ; il ne bannit ni ne retire rien.',
 
   'admin.moderation.timeline.received': 'Reçu',
   'admin.moderation.timeline.taken': 'Pris en charge par {moderator}',
@@ -105,7 +101,6 @@ const f = {
   'admin.moderation.siblings.seeAll': 'Voir les {count} signalements',
   'admin.moderation.siblings.error': 'Les autres signalements n’ont pas pu être chargés.',
 
-  'admin.moderation.actions.hint': 'Ces liens ouvrent la fiche concernée : le signalement ne bannit ni ne retire rien lui-même.',
   'admin.moderation.actions.memberSecurity': 'Bannir ou suspendre ce membre',
   'admin.moderation.actions.authorSecurity': 'Examiner l’auteur : {name}',
   'admin.moderation.actions.post': 'Ouvrir la publication pour la retirer',

@@ -183,6 +183,19 @@
   border: 0;
   cursor: pointer;
   font-family: inherit;
+  transition: scale var(--press-return-ms, 180ms) var(--press-curve, cubic-bezier(0.2, 0, 0, 1));
+}
+/* L'appui de `btn-press` (ui.css, #18322) : la landing n'importe pas
+ * l'utilitaire, elle en reprend les jetons. */
+.ld-btn:active {
+  scale: var(--press-scale, 0.95);
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-btn:active {
+    scale: none;
+    opacity: var(--press-reduced-opacity, 0.78);
+  }
 }
 .ld-btn.ld-btn--ghost {
   border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 42%, transparent);

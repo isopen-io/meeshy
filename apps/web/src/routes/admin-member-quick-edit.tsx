@@ -270,8 +270,8 @@ export function AdminMemberQuickEdit({
             {t('admin.quickEdit.title')}
           </h2>
           {folded ? null : (
-            <p className="text-caption" style={{ color: INK2 }}>
-              {t('admin.quickEdit.subtitle')}
+            <p data-admin-quick-edit-note className="text-caption" style={{ color: INK2 }}>
+              {t('admin.quickEdit.note')}
             </p>
           )}
         </div>
