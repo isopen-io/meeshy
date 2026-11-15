@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
@@ -148,5 +149,66 @@ describe('MeeshyToggleRowFace — le dessin seul', () => {
   test('la variante destructive porte son attribut de variante', () => {
     const container = mount(<MeeshyToggleRowFace title="Tout effacer" kind="destructive" />);
     expect(container.querySelector('[data-kind="destructive"]')).not.toBeNull();
+  });
+});
+
+describe('MeeshyToggleRow — ce que la ligne pâlit, ce qu’elle garde', () => {
+  test('une ligne désactivée pâlit la tête, le titre et l’accessoire, et garde l’encre de sa raison', () => {
+    const container = mount(
+      <MeeshyToggleRow
+        title="Visible"
+        subtitle="Réglé par l’administrateur"
+        leading={<span data-testid="icon">i</span>}
+        accessory={{ type: 'toggle', isOn: true }}
+        disabled
+        onAction={() => {}}
+      />,
+    );
+    const dimmed = (selector: string) => container.querySelector(selector)?.closest('.kit-row__dimmed') ?? null;
+    expect(dimmed('[data-testid="icon"]')).not.toBeNull();
+    expect(dimmed('.kit-row__title')).not.toBeNull();
+    expect(dimmed('.kit-row__switch')).not.toBeNull();
+    expect(container.querySelector('.kit-row__subtitle')).not.toBeNull();
+    expect(dimmed('.kit-row__subtitle')).toBeNull();
+  });
+
+  test('la tête et le texte forment un bloc ; l’accessoire passe dessous en entier, comme sur iOS', () => {
+    const container = mount(
+      <MeeshyToggleRow title="Autoriser la reprise du son" leading={<span data-testid="icon">i</span>} accessory={{ type: 'toggle', isOn: true }} onAction={() => {}} />,
+    );
+    const main = container.querySelector('[data-testid="icon"]')?.closest('.kit-row__main') ?? null;
+    expect(main).not.toBeNull();
+    expect(main?.querySelector('.kit-row__title')).not.toBeNull();
+    expect(main?.querySelector('.kit-row__switch')).toBeNull();
+    expect(container.querySelector('.kit-row__accessories')?.parentElement).toBe(main?.parentElement ?? null);
+  });
+});
+
+describe('la feuille de style de la ligne', () => {
+  const css = readFileSync(new URL('../../styles/kit-toggle-row.css', import.meta.url), 'utf8');
+  const rule = (selector: string): string => {
+    const start = css.indexOf(`${selector} {`);
+    if (start < 0) throw new Error(`règle absente : ${selector}`);
+    return css.slice(start, css.indexOf('}', start));
+  };
+
+  test('le voile d’appui se peint sous le contenu et le filet, jamais par-dessus', () => {
+    expect(rule('.kit-row')).toContain('isolation: isolate');
+    expect(rule('.kit-row__veil')).toContain('z-index: -1');
+  });
+
+  test('un texte long passe à la ligne à côté de l’accessoire ; seule une grande police le fait passer dessous', () => {
+    expect(rule('.kit-row__main')).toMatch(/min-inline-size: min\(\d+em, 100%\)/);
+    expect(rule('.kit-row__main')).toContain('flex: 1 1 0');
+    expect(rule('.kit-row__text')).not.toContain('flex-wrap');
+  });
+
+  test('le destructif du thème clair prend l’encre d’erreur d’iOS (errorInk)', () => {
+    expect(css).toContain('--kit-row-destructive-theme: var(--ios-error-ink)');
+  });
+
+  test('n’anime que l’opacité et la transformation', () => {
+    const animated = [...css.matchAll(/transition:\s*([a-z-]+)/g)].map((match) => match[1]);
+    expect(animated.every((property) => property === 'opacity' || property === 'transform' || property === 'none')).toBe(true);
   });
 });
