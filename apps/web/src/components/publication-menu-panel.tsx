@@ -10,7 +10,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateSceneExport } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
-import { layerMotion } from '@/lib/view/layer-presence';
+import { layerMotion } from '@/lib/view/dialog-exit';
 import { href, navigate } from '@/routes/route-table';
 
 import { ContentRemovalSheet } from './content-removal-sheet';

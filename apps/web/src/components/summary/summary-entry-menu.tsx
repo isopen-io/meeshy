@@ -6,7 +6,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { isContextMenuKey, useLongPress } from '@/lib/view/long-press';
 import { placePopoverVertical } from '@/lib/view/popover';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import type { SummaryEntryAction, SummaryEntryMenu } from '@/lib/view/summary-exits';
 

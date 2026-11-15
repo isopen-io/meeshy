@@ -2,7 +2,7 @@ import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { isGridKey, nextGridIndex } from '@/lib/emoji/emoji-grid-keys';
 import { skinToneVariants, type EmojiSkinTone } from '@/lib/emoji/emoji-skin-tone';
-import { layerMotion } from '@/lib/view/layer-presence';
+import { layerMotion } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**

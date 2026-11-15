@@ -12,7 +12,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isSceneExportCatalogLoaded, loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
-import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
 import { GlyphSvg } from './glyph';

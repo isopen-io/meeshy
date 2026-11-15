@@ -7,7 +7,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PUBLICATION_KINDS, type PublicationKind } from '@/lib/stories/publication-kind';
 import { PUBLICATION_LAYOUT_ORDER, publicationLayoutLabelKey, type PublishChoice } from '@/lib/stories/publication-layout';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
 import { Glyph } from './glyph';

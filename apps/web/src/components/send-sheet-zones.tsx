@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 
 import type { PublishFormat } from '@/lib/send/send-sheet-plan';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { SEND_SHEET_GLYPHS } from './glyphs-send-sheet';
