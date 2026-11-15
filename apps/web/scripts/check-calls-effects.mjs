@@ -678,7 +678,14 @@ try {
       check(await appears(page, '[data-call-frame-moods] [data-call-frame-mood]:nth-child(2)'), `${label} : les puces d'ambiance se montrent`);
       const chips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }));
       check(chips[0]?.id === 'classics' && chips[0]?.label === 'Classiques' && chips[0]?.pressed === 'true' && chips.length > 2, `${label} : « Classiques » d'abord et choisie, puis ${chips.length - 1} ambiances (${chips.map((chip) => chip.label).join(' · ')})`);
-      check(chips.every((chip) => chip.height >= TAP_FLOOR && chip.width >= TAP_FLOOR), `${label} : chaque puce fait ${TAP_FLOOR} au moins`);
+      // `TAP_FLOOR - 0.5`, comme aux lignes de la barre et de la liste : `CHIP`
+      // porte `min-h-11`, soit 2,75 rem — exactement 44 px —, et la boîte rendue
+      // tombe à ±0,00003 px de 44 selon la passe (mesuré : 44.000030517578125 en
+      // clair, 43.999969482421875 en sombre, sur le MÊME arbre). Comparer `>= 44`
+      // nu faisait donc rougir cette garde une passe sur deux, en accusant tantôt
+      // le clair tantôt le sombre (#18607). Une cible réellement trop petite l'est
+      // de plusieurs pixels, jamais de trois cent-millièmes.
+      check(chips.every((chip) => chip.height >= TAP_FLOOR - 0.5 && chip.width >= TAP_FLOOR - 0.5), `${label} : chaque puce fait ${TAP_FLOOR} au moins`);
       const classics = await page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item')));
       const mood = chips[1]?.id ?? '';
       await page.click(`[data-call-frame-mood="${mood}"]`);
