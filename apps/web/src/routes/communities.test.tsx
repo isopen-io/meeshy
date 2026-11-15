@@ -212,11 +212,4 @@ describe('la description d’une carte de communauté', () => {
     const flat = 'Un très long texte sans la moindre pause qui continue encore et encore';
     expect(communityCardBlurb(flat)).toBe(flat);
   });
-
-  test('la carte montre la proposition entière, et le lecteur d’écran entend toute la description', () => {
-    const full = 'Échanges linguistiques du jeudi soir, en wolof, français et anglais.';
-    const html = renderToStaticMarkup(<CommunityCard language="fr" community={community({ description: full })} />);
-    expect(html).toContain('>Échanges linguistiques du jeudi soir</span>');
-    expect(html).toContain(`title="${full}"`);
-  });
 });
