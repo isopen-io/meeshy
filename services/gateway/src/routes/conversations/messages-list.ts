@@ -89,6 +89,7 @@ import {
   withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import { projectEphemeralTombstone, type TombstoneRow } from './ephemeralTombstone';
 import {
   isServableThroughQuotes,
   loadInheritedEphemeralDeadlines,
@@ -773,6 +774,17 @@ export function registerMessagesListRoute(
       if (viewOnceStates.size > 0) {
         mappedMessages.forEach((m, index) => {
           mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
+        });
+      }
+
+      // #18556 — un éphémère échu pour ce lecteur, encore dans sa grâce, ne
+      // sert plus que sa bulle.
+      if (ephemeralDeadlines.size > 0) {
+        const tombstoneAt = new Date();
+        const rows = new Map(messages.map((row: { id: string } & TombstoneRow) => [row.id, row]));
+        mappedMessages.forEach((m, index) => {
+          const row = rows.get(m.id);
+          if (row) mappedMessages[index] = projectEphemeralTombstone(m, row, ephemeralDeadlines.get(m.id), tombstoneAt);
         });
       }
 

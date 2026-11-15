@@ -32,6 +32,13 @@ jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
+const mockStoredPrivacy = new Map<string, { showReadReceipts?: boolean }>();
+jest.mock('../../../services/preferences/privacy-cache', () => ({
+  ...(jest.requireActual('../../../services/preferences/privacy-cache') as Record<string, unknown>),
+  loadPrivacyPreferencesCached: async (_prisma: unknown, userIds: string[]) =>
+    new Map(userIds.map((id) => [id, mockStoredPrivacy.get(id) ?? {}])),
+}));
+
 import { registerMessageAfterReadRoutes } from '../../../routes/conversations/messages-after-read';
 
 const CONV = '507f1f77bcf86cd799439011';
@@ -62,14 +69,18 @@ function matches(row: Row, where: Row): boolean {
   });
 }
 
-function buildDb() {
+function buildDb(options: { othersConsumedAt?: Date } = {}) {
+  const others = options.othersConsumedAt ? { ephemeralExpiresAt: options.othersConsumedAt } : {};
   const messages: Row[] = [
     { id: FLAME, conversationId: CONV, senderId: SENDER, effectFlags: AFTER_READ, expiresAt: new Date('2099-01-01') },
     { id: PLAIN, conversationId: CONV, senderId: SENDER, effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 30 },
   ];
   const entries: Row[] = [
     { id: 'e-reader', messageId: FLAME, conversationId: CONV, participantId: READER },
-    { id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER },
+    { id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ...others },
+    ...(options.othersConsumedAt
+      ? [{ id: 'e-anon', messageId: FLAME, conversationId: CONV, participantId: ANON, ...others }]
+      : []),
   ];
   const participants: Row[] = [
     { id: SENDER, conversationId: CONV, userId: 'sender-user', isActive: true },
@@ -102,15 +113,20 @@ function buildDb() {
     },
     notification: { findMany: async () => [], deleteMany: async () => ({ count: 0 }) },
   };
-  return { prisma: prisma as any, entries };
+  return { prisma: prisma as any, entries, messages };
 }
 
 async function buildApp(db: ReturnType<typeof buildDb>, caller: 'member' | 'anonymous' = 'member') {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  const emitted: Array<{ room: string; event: string; data: unknown }> = [];
+  const emitted: Array<{ room: string | string[]; event: string; data: unknown }> = [];
+  const enqueue = jest.fn(async (_params: unknown) => undefined);
   (app as any).socketIOHandler = {
     getManager: () => ({
-      getIO: () => ({ to: (room: string) => ({ emit: (event: string, data: unknown) => emitted.push({ room, event, data }) }) }),
+      getIO: () => ({
+        to: (room: string | string[]) => ({ emit: (event: string, data: unknown) => emitted.push({ room, event, data }) }),
+      }),
+      enqueueOfflineMessageMutation: enqueue,
+      emitUnreadCountsToRecipients: async () => undefined,
     }),
   };
   const auth = async (req: any) => {
@@ -121,13 +137,14 @@ async function buildApp(db: ReturnType<typeof buildDb>, caller: 'member' | 'anon
   };
   registerMessageAfterReadRoutes(app, db.prisma, auth);
   await app.ready();
-  return { app, emitted };
+  return { app, emitted, enqueue };
 }
 
 const consume = (app: any, messageIds: unknown) =>
   app.inject({ method: 'POST', url: `/conversations/${CONV}/messages/after-read/consume`, payload: { messageIds } });
 
 beforeEach(() => {
+  mockStoredPrivacy.clear();
   mockResolveConversationId.mockResolvedValue(CONV);
   mockCanAccessConversation.mockResolvedValue(true);
 });
@@ -145,6 +162,54 @@ describe('POST /conversations/:id/messages/after-read/consume', () => {
         { room: `user:${READER_USER}`, event: 'message:expired', data: { messageId: FLAME, conversationId: CONV } },
       ]);
       expect(db.entries.find((e) => e.id === 'e-peer')?.ephemeralExpiresAt).toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('le DERNIER lecteur qui quitte brûle la flamme-œil sous les yeux de tous, expéditeur compris (#18556)', async () => {
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      const res = await consume(app, [FLAME]);
+
+      expect(res.json().data).toEqual({ consumed: [FLAME] });
+      expect(emitted).toContainEqual({
+        room: [`conversation:${CONV}`, 'user:sender-user', `user:${READER_USER}`, 'user:peer-user', `user:${ANON}`],
+        event: 'message:expired',
+        data: { messageId: FLAME, conversationId: CONV },
+      });
+      expect(enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'expired', messageId: FLAME, actorUserId: null }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un destinataire qui a coupé ses accusés de lecture retient le feu anticipé : l’expéditeur garde la bulle (#18556)', async () => {
+    mockStoredPrivacy.set('peer-user', { showReadReceipts: false });
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      const res = await consume(app, [FLAME]);
+
+      expect(res.json().data).toEqual({ consumed: [FLAME] });
+      expect(emitted.map((e) => e.room)).toEqual([`user:${READER_USER}`]);
+      expect(enqueue).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('tant qu’un lecteur n’a pas quitté, la flamme-œil ne brûle que chez celui qui sort', async () => {
+    const db = buildDb();
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      await consume(app, [FLAME]);
+
+      expect(emitted.map((e) => e.room)).toEqual([`user:${READER_USER}`]);
+      expect(enqueue).not.toHaveBeenCalled();
     } finally {
       await app.close();
     }

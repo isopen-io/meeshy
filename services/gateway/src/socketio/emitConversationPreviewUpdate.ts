@@ -1,4 +1,5 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { loadPreviewReaderDeadlines } from './utils/previewReaderDeadlines';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
@@ -450,6 +451,15 @@ export async function emitConversationPreviewUpdate(
     // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Les deux `continue`
     // deviennent un `null` rendu : le site unique les traite comme « rien à
     // envoyer à celui-ci », ce qu'ils ont toujours voulu dire.
+    const readerDeadlines = await loadPreviewReaderDeadlines(
+      prisma,
+      served.flatMap((p) => {
+        const own = ownMessageOf(p.id);
+        return own ? [{ participantId: p.id, message: own }] : [];
+      }),
+      onError,
+    );
+
     emitConversationUpdatedPerReader(
       io,
       participantUserRoomTargets(served),
@@ -469,6 +479,7 @@ export async function emitConversationPreviewUpdate(
         const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
           viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
           quotedDeathAt: own ? quotedDeathFor(quotedDeaths.get(own.id), participant) : null,
+          servedExpiresAt: readerDeadlines.get(participant.id) ?? null,
         });
         if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) return null;
         return {
