@@ -27,6 +27,8 @@ const logger = enhancedLogger.child({ module: 'BatteryHandler' });
 
 /** Douze relevés par minute et par compte : un relevé par changement, jamais un flux. */
 export const BATTERY_RATE = { max: 12, windowMs: 60_000, keyPrefix: 'battery:u' } as const;
+/** Les demandes de relevé : le même plafond que `POST /relations/:userId/battery/pull` (30 par minute). */
+export const BATTERY_PULL_RATE = { max: 30, windowMs: 60_000, keyPrefix: 'battery:pull:u' } as const;
 
 /** Une passe par minute ; le verrou vit un peu moins, pour que la passe suivante ne le trouve jamais pris. */
 export const BATTERY_SWEEP_INTERVAL_MS = 60_000;
@@ -45,6 +47,8 @@ export type BatteryHandlerDeps = {
   readonly callerOf: (socketId: string) => { readonly userId: string; readonly isAnonymous: boolean } | null;
   /** `true` dans le débit, `false` au-delà, `null` quand le limiteur ne sait pas juger (on laisse passer). */
   readonly withinRate: (userId: string) => Promise<boolean | null>;
+  /** Le débit des demandes de relevé, distinct de celui des relevés. */
+  readonly withinPullRate: (userId: string) => Promise<boolean | null>;
 };
 
 const UNAVAILABLE = { success: false, error: 'Batterie momentanément indisponible', code: BATTERY_ERROR_CODES.UNAVAILABLE } as const;
@@ -83,10 +87,13 @@ export function listenBattery(socket: BatterySocket, deps: BatteryHandlerDeps): 
     const reply = replier<BatteryPullAck>(ack);
     const userId = registered();
     if (!userId) return reply(NOT_ALLOWED);
-    requestBatteryPull(deps.pull, { readerId: userId, payload: data }).then(reply, (error: unknown) => {
-      logger.error('[BATTERY_PULL] Error', { error: failureMessage(error) });
-      reply(UNAVAILABLE);
-    });
+    deps
+      .withinPullRate(userId)
+      .then((within) => (within === false ? RATE_LIMITED : requestBatteryPull(deps.pull, { readerId: userId, payload: data })))
+      .then(reply, (error: unknown) => {
+        logger.error('[BATTERY_PULL] Error', { error: failureMessage(error) });
+        reply(UNAVAILABLE);
+      });
   });
 }
 
@@ -132,14 +139,21 @@ export function noteBatteryAlive(params: { readonly userId: string; readonly ses
   alive().catch((error: unknown) => logger.error('[BATTERY_ALIVE] Error', { error: failureMessage(error) }));
 }
 
-let limiter: { readonly client: unknown; readonly limiter: RateLimiter } | null = null;
+type LimiterSlot = { readonly client: unknown; readonly limiter: RateLimiter };
+const limiters = new Map<string, LimiterSlot>();
 
-const rateLimiter = (): RateLimiter => {
+const rateLimiter = (rate: typeof BATTERY_RATE | typeof BATTERY_PULL_RATE): RateLimiter => {
   const client = getCacheStore().getNativeClient();
-  if (!limiter || limiter.client !== client) {
-    limiter = { client, limiter: createCustomRateLimiter({ ...BATTERY_RATE }, client ?? undefined) };
-  }
-  return limiter.limiter;
+  const slot = limiters.get(rate.keyPrefix);
+  if (slot && slot.client === client) return slot.limiter;
+  const limiter = createCustomRateLimiter({ ...rate }, client ?? undefined);
+  limiters.set(rate.keyPrefix, { client, limiter });
+  return limiter;
+};
+
+const withinOf = (rate: typeof BATTERY_RATE | typeof BATTERY_PULL_RATE) => async (userId: string): Promise<boolean | null> => {
+  const info = await rateLimiter(rate).consume(userId, 1);
+  return info === null ? null : info.retryAfter === undefined;
 };
 
 export function batteryHandlerDeps(params: {
@@ -158,9 +172,7 @@ export function batteryHandlerDeps(params: {
       const user = userId ? params.connectedUsers.get(userId) : undefined;
       return userId && user ? { userId, isAnonymous: user.isAnonymous } : null;
     },
-    withinRate: async (userId) => {
-      const info = await rateLimiter().consume(userId, 1);
-      return info === null ? null : info.retryAfter === undefined;
-    },
+    withinRate: withinOf(BATTERY_RATE),
+    withinPullRate: withinOf(BATTERY_PULL_RATE),
   };
 }

@@ -5,6 +5,11 @@
  *
  * La demande part vers les sockets de l'émetteur (`battery:pull-requested`) ET en push
  * silencieux vers son téléphone, qui peut dormir : ni l'un ni l'autre ne dit QUI demande.
+ *
+ * Un Sang que l'émetteur a EXCLU (retrait par personne, coupure globale) reçoit la même réponse
+ * qu'un Sang servi — le même accusé, le même délai de 5 min — mais rien ne réveille le
+ * téléphone : la route n'est pas un oracle sur un choix privé. Seul un niveau insuffisant (ou
+ * un blocage) rend `BATTERY_PULL_FORBIDDEN`, ce que le lien dit déjà.
  */
 import {
   BATTERY_ERROR_CODES,
@@ -12,6 +17,7 @@ import {
   type BatteryPullAck,
 } from '@meeshy/shared/types/battery';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { pairAccessAmong } from '../relations/pairAccess';
 import { batteryAccessAmong } from './batteryAccess';
 import type { BatteryRelayDeps } from './batteryRelay';
 import { claimBatteryPull } from './batteryStore';
@@ -29,24 +35,26 @@ export async function requestBatteryPull(deps: BatteryPullDeps, params: { readon
   const emitterId = parsed.data.userId.toLowerCase();
   if (emitterId === params.readerId.toLowerCase()) return refused(BATTERY_ERROR_CODES.PULL_FORBIDDEN, 'Relevé indisponible');
 
-  const access = await batteryAccessAmong(deps.prisma, {
-    subjectId: emitterId,
-    otherIds: [params.readerId],
-    subjectIs: 'target',
-    now: new Date(deps.now()),
-    feature: 'device.battery.pull',
-  });
-  if (access.get(params.readerId)?.allowed !== true) return refused(BATTERY_ERROR_CODES.PULL_FORBIDDEN, 'Relevé indisponible');
+  const now = new Date(deps.now());
+  const pull = { feature: 'device.battery.pull', subjectId: emitterId, otherIds: [params.readerId], subjectIs: 'target', now } as const;
+  const access = await batteryAccessAmong(deps.prisma, pull);
+  const served = access.get(params.readerId)?.allowed === true;
+  if (!served) {
+    const lawOpens = await pairAccessAmong(deps.prisma, { ...pull, consentOf: () => 'granted' });
+    if (lawOpens.get(params.readerId)?.allowed !== true) return refused(BATTERY_ERROR_CODES.PULL_FORBIDDEN, 'Relevé indisponible');
+  }
   if (!(await claimBatteryPull(deps.cache, { emitterId, readerId: params.readerId }))) {
     return refused(BATTERY_ERROR_CODES.PULL_TOO_SOON, 'Un relevé vient d\'être demandé');
   }
 
-  const requestedAt = new Date(deps.now()).toISOString();
+  const requestedAt = now.toISOString();
+  const accepted = { success: true, data: { requestedAt, episodeOnly: true } } as const;
+  if (!served) return accepted;
   try {
     deps.io?.to(ROOMS.user(emitterId)).emit(SERVER_EVENTS.BATTERY_PULL_REQUESTED, { requestedAt });
   } catch {
     /* le push silencieux suit */
   }
   await deps.wake(emitterId, requestedAt).catch(() => undefined);
-  return { success: true, data: { requestedAt } };
+  return accepted;
 }

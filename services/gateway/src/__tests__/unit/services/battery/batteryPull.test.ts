@@ -15,18 +15,24 @@ import { batteryCacheInMemory } from './batteryWorld';
 const EMETTEUR = '6500000000000000000000e1';
 const SANG = '6500000000000000000000b1';
 const PROCHE = '6500000000000000000000c1';
+const SANG_EXCLU = '6500000000000000000000b2';
 const T0 = Date.parse('2026-11-15T10:00:00.000Z');
 
-function monde() {
+function monde(options: { readonly coupure?: boolean } = {}) {
   const world = messagingWorld({
-    links: [[EMETTEUR, SANG, 'BLOOD'], [EMETTEUR, PROCHE, 'CLOSE']],
-    users: [EMETTEUR, SANG, PROCHE].map((id) => ({ id, birthDate: ADULT_BIRTH, role: 'USER' })),
+    links: [[EMETTEUR, SANG, 'BLOOD'], [EMETTEUR, PROCHE, 'CLOSE'], [EMETTEUR, SANG_EXCLU, 'BLOOD']],
+    users: [EMETTEUR, SANG, PROCHE, SANG_EXCLU].map((id) => ({
+      id,
+      birthDate: ADULT_BIRTH,
+      role: 'USER',
+      ...(id === EMETTEUR && options.coupure ? { batterySharingDisabledAt: new Date(T0) } : {}),
+    })),
   });
   const emissions: Array<{ room: string; event: string; data: unknown }> = [];
   const wakes: Array<[string, string]> = [];
   let now = T0;
   const deps: BatteryPullDeps = {
-    prisma: { ...world.prisma, relationFeatureSetting: table([{ ownerId: EMETTEUR, otherId: PROCHE, batteryShared: true }]) } as unknown as PrismaClient,
+    prisma: { ...world.prisma, relationFeatureSetting: table([{ ownerId: EMETTEUR, otherId: PROCHE, batteryShared: true }, { ownerId: EMETTEUR, otherId: SANG_EXCLU, batteryShared: false }]) } as unknown as PrismaClient,
     cache: batteryCacheInMemory(),
     io: { to: (room: string) => ({ emit: (event: string, data: unknown) => emissions.push({ room, event, data }) }) } as unknown as BatteryPullDeps['io'],
     now: () => now,
@@ -42,7 +48,7 @@ describe('battery:pull', () => {
     const m = monde();
     const ack = await requestBatteryPull(m.deps, { readerId: SANG, payload: { userId: EMETTEUR } });
 
-    expect(ack).toEqual({ success: true, data: { requestedAt: new Date(T0).toISOString() } });
+    expect(ack).toEqual({ success: true, data: { requestedAt: new Date(T0).toISOString(), episodeOnly: true } });
     expect(m.emissions).toEqual([{ room: ROOMS.user(EMETTEUR), event: SERVER_EVENTS.BATTERY_PULL_REQUESTED, data: { requestedAt: new Date(T0).toISOString() } }]);
     expect(JSON.stringify(m.emissions)).not.toContain(SANG);
     expect(m.wakes).toEqual([[EMETTEUR, new Date(T0).toISOString()]]);
@@ -64,5 +70,22 @@ describe('battery:pull', () => {
   it('une charge illisible est refusée', async () => {
     const m = monde();
     expect(await requestBatteryPull(m.deps, { readerId: SANG, payload: { userId: 'x' } })).toMatchObject({ code: BATTERY_ERROR_CODES.INVALID });
+  });
+
+  it('un Sang que l\'émetteur a exclu reçoit la MÊME réponse qu\'un Sang servi : aucun oracle sur le choix de l\'émetteur', async () => {
+    const m = monde();
+    const servi = await requestBatteryPull(m.deps, { readerId: SANG, payload: { userId: EMETTEUR } });
+    const exclu = await requestBatteryPull(m.deps, { readerId: SANG_EXCLU, payload: { userId: EMETTEUR } });
+    expect(exclu).toEqual(servi);
+    expect(await requestBatteryPull(m.deps, { readerId: SANG_EXCLU, payload: { userId: EMETTEUR } })).toMatchObject({ code: BATTERY_ERROR_CODES.PULL_TOO_SOON });
+    expect(m.wakes).toHaveLength(1);
+    expect(m.emissions).toHaveLength(1);
+  });
+
+  it('la coupure globale de l\'émetteur ne se lit pas non plus : la demande est accusée, rien ne réveille le téléphone', async () => {
+    const m = monde({ coupure: true });
+    expect(await requestBatteryPull(m.deps, { readerId: SANG, payload: { userId: EMETTEUR } })).toMatchObject({ success: true, data: { episodeOnly: true } });
+    expect(m.wakes).toEqual([]);
+    expect(m.emissions).toEqual([]);
   });
 });

@@ -117,11 +117,11 @@ export function registerRelationBattery(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [writes.middleware()],
     schema: {
-      description: 'Ask a Blood link\'s phone to read its battery now (once every 5 minutes per pair; the request does not say who asks).',
+      description: 'Ask a Blood link\'s phone to read its battery now (once every 5 minutes per pair; the request does not say who asks). The reading comes back only if it opens or continues an episode (episodeOnly).',
       tags: ['relations'],
       summary: 'Request a battery reading',
       params: userIdParams,
-      response: { 200: envelope({ type: 'object', properties: { requestedAt: { type: 'string' } } }), ...batteryErrors },
+      response: { 200: envelope({ type: 'object', properties: { requestedAt: { type: 'string' }, episodeOnly: { type: 'boolean' } } }), ...batteryErrors },
       security: [{ bearerAuth: [] }],
     },
   }, async (request, reply) => {

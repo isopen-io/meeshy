@@ -109,8 +109,14 @@ export type BatteryReportAck =
   | { readonly success: true; readonly data: { readonly tracked: boolean } }
   | { readonly success: false; readonly error: string; readonly code: BatteryErrorCode };
 
+/**
+ * L'accusé du relevé à la demande. `episodeOnly` le dit au demandeur : le relevé ne lui est
+ * servi QUE s'il ouvre ou poursuit un épisode (`battery:changed`) ; à plus de 30 %, rien ne
+ * revient — « ça va » et « pas de réponse » ne se distinguent pas, par construction. La même
+ * réponse part quand l'émetteur a exclu le demandeur : la route n'est pas un oracle sur son choix.
+ */
 export type BatteryPullAck =
-  | { readonly success: true; readonly data: { readonly requestedAt: string } }
+  | { readonly success: true; readonly data: { readonly requestedAt: string; readonly episodeOnly: true } }
   | { readonly success: false; readonly error: string; readonly code: BatteryErrorCode };
 
 /** Réglage GLOBAL de l'émetteur : partager sa batterie (vrai par défaut — les Sangs la reçoivent sans confirmation). */

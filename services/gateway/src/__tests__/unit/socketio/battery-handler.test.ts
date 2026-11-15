@@ -14,7 +14,7 @@ import { batteryCacheInMemory } from '../services/battery/batteryWorld';
 const MOI = '6900000000000000000000a1';
 const NOW = Date.parse('2026-11-15T10:00:00.000Z');
 
-function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean | null } = {}) {
+function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean | null; readonly withinPull?: boolean | null } = {}) {
   const world = messagingWorld({ users: [{ id: MOI }] });
   const cache = batteryCacheInMemory();
   const sessions: Array<string | null> = [];
@@ -35,6 +35,7 @@ function porte(options: { readonly isAnonymous?: boolean; readonly within?: bool
     pull: { prisma: relay.prisma, cache, io: undefined, now: relay.now, wake: async () => undefined },
     callerOf: () => ({ userId: MOI, isAnonymous: options.isAnonymous ?? false }),
     withinRate: async () => (options.within === undefined ? true : options.within),
+    withinPullRate: async () => (options.withinPull === undefined ? true : options.withinPull),
   };
   const handlers = new Map<string, (...args: unknown[]) => void>();
   listenBattery({ id: 'sock', data: { sessionId: 'sess-1' }, on: (event, listener) => { handlers.set(event, listener); } }, deps);
@@ -63,6 +64,11 @@ describe('BatteryHandler — la porte', () => {
     const p = porte({ within: false });
     expect(await p.call('battery:report', releve)).toMatchObject({ success: false, code: 'BATTERY_RATE_LIMITED' });
     expect(p.cache.entries.size).toBe(0);
+  });
+
+  it('les demandes de relevé ont leur propre débit, comme par REST : au-delà, BATTERY_RATE_LIMITED', async () => {
+    const p = porte({ withinPull: false });
+    expect(await p.call('battery:pull', { userId: '6900000000000000000000b1' })).toMatchObject({ success: false, code: 'BATTERY_RATE_LIMITED' });
   });
 
   it('une demande de relevé de soi est refusée', async () => {
