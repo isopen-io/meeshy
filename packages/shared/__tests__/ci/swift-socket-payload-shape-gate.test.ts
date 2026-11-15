@@ -233,7 +233,7 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     ].sort();
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
-    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(26);
+    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(29);
   });
   /**
    * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —

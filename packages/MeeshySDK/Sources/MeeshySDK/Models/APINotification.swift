@@ -108,6 +108,15 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 ),
                 actorName
             )
+        case .deviceBattery:
+            return String(
+                format: String(
+                    localized: "notification.deviceBattery.fallbackTitle",
+                    defaultValue: "Batterie de %@",
+                    bundle: .main
+                ),
+                actorName
+            )
         case .gameDuoInvited:
             return String(
                 format: String(localized: "notification.game.duoInvited.fallbackTitle", defaultValue: "%@ t’invite à un duo", bundle: .main),

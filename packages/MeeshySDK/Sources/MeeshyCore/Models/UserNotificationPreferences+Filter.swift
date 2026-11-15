@@ -139,6 +139,8 @@ public extension UserNotificationPreferences {
             return contactRequestEnabled
         case .contactRecentlyActive:
             return contactActivityEnabled
+        case .deviceBattery:
+            return receivesDeviceBattery
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return gameEnabled
         case .newConversation, .newConversationDirect, .newConversationGroup,

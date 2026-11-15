@@ -444,6 +444,15 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         get { bringEnabled ?? true }
         set { bringEnabled = newValue }
     }
+    /// « Batterie de mes proches » (`notification.deviceBatteryEnabled`, #14147) — le push `device_battery`.
+    /// `nil` = jamais appris, absent du corps envoyé (même règle que `bringEnabled`). L'écran lit
+    /// `receivesDeviceBattery`. Ne coupe que le PUSH : la SyncPill et l'icône d'état suivent le mode de chaque
+    /// conversation.
+    public var deviceBatteryEnabled: Bool?
+    public var receivesDeviceBattery: Bool {
+        get { deviceBatteryEnabled ?? true }
+        set { deviceBatteryEnabled = newValue }
+    }
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -481,7 +490,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
         friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true, gameEnabled: Bool = true,
-        bringEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        bringEnabled: Bool? = nil, deviceBatteryEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
@@ -502,6 +511,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.contactActivityEnabled = contactActivityEnabled
         self.gameEnabled = gameEnabled
         self.bringEnabled = bringEnabled
+        self.deviceBatteryEnabled = deviceBatteryEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -516,7 +526,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
         case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled, gameEnabled
-        case bringEnabled
+        case bringEnabled, deviceBatteryEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -551,6 +561,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         contactActivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .contactActivityEnabled) ?? Self.defaults.contactActivityEnabled
         gameEnabled = try c.decodeIfPresent(Bool.self, forKey: .gameEnabled) ?? Self.defaults.gameEnabled
         bringEnabled = try c.decodeIfPresent(Bool.self, forKey: .bringEnabled)
+        deviceBatteryEnabled = try c.decodeIfPresent(Bool.self, forKey: .deviceBatteryEnabled)
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime
