@@ -180,7 +180,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         CATransaction.setDisableActions(true)
         layer.position = CGPoint(x: bounds.midX, y: centerY)
         layer.transform = CATransform3DIdentity
-        applyInlineEditMask(to: layer, visibleHeight: visibleHeight)
+        StoryInlineEditMask.apply(to: layer, visibleHeight: visibleHeight)
         CATransaction.commit()
 
         editor.transform = .identity
@@ -219,37 +219,6 @@ extension StoryCanvasUIView: UITextViewDelegate {
     private func canvasY(fromGlobal y: CGFloat) -> CGFloat? {
         guard y.isFinite, y < .greatestFiniteMagnitude else { return nil }
         return convert(CGPoint(x: 0, y: y), from: nil).y
-    }
-
-    /// Aligne le FOND du texte (solide, glass, losange, bulle — peint par la
-    /// calque, pas par le champ) sur la fenêtre de défilement.
-    ///
-    /// Les sous-calques de fond sont dimensionnés dans `StoryTextLayer
-    /// .configure()` à partir de `bounds` ; les muter après coup ne les
-    /// redimensionne pas. Un texte plus haut que la zone garderait donc un fond
-    /// sortant de l'écran sous un champ borné. `StoryTextLayer` n'utilise jamais
-    /// `self.mask` (seulement `backdrop.mask` sur son sous-calque de glass),
-    /// la propriété est libre.
-    private func applyInlineEditMask(to layer: StoryTextLayer, visibleHeight: CGFloat) {
-        guard layer.bounds.height > visibleHeight + 0.5 else {
-            layer.mask = nil
-            return
-        }
-        let window = CGRect(x: 0,
-                            y: (layer.bounds.height - visibleHeight) / 2,
-                            width: layer.bounds.width,
-                            height: visibleHeight)
-        // Ré-assigner la MÊME instance en masque la fait passer par un retrait
-        // puis un ré-attachement côté Core Animation, dont le superlayer d'un
-        // masque est déjà la calque masquée : on se contente de recadrer.
-        if let existing = layer.mask {
-            existing.frame = window
-            return
-        }
-        let mask = CALayer()
-        mask.backgroundColor = UIColor.white.cgColor
-        mask.frame = window
-        layer.mask = mask
     }
 
     /// Hauteur maximale offerte au champ : celle de la zone, ou aucune borne
