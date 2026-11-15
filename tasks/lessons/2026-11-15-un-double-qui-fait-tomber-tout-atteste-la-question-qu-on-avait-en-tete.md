@@ -50,3 +50,12 @@ et ce changement est le signal — pas une rupture à réparer en ajustant
 l'attente. Et quand un témoin de panne change de verdict après un ajout, la
 question n'est pas « comment le remettre au vert ? » mais **« laquelle des deux
 pannes gardait-il, et qui garde l'autre ? »**.
+
+**Jumeau du même cycle, mesuré par l'audit adversarial.** Un ROUGE en BLOC a le
+même angle mort qu'un double qui lève sur tout : il prouve qu'**au moins une**
+garde porte, jamais que **chacune** porte. Dix témoins, cinq gardes, cinq
+rouges — l'arithmétique ressemblait à une correspondance un-pour-un, et deux
+témoins tombaient en réalité pour la garde du voisin, laissant la garde du plan
+signé (vue unique, flammes) prouvée par RIEN. La mesure qui distingue est la
+mutation **une par une**. C'est elle, et pas le compte, qui dit laquelle des
+gardes est décorative.

@@ -112,7 +112,12 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
   // chemin d'édition : on ne sait NI qui est bloqué, NI qui est autorisé, et la
   // relecture du fil sert la pièce enrichie que la base garde.
   const readership = await messageReadership(prisma, conversationId, messageId, (error) =>
-    logger.error('attachment-updated readership unresolvable — nothing live, nothing queued', { conversationId, messageId, error }),
+    // `error` en DEUXIÈME argument, `context` en troisième : la signature est
+    // `error(message, error?, context?)`, et tout passer en un seul objet range
+    // l'`Error` dans le créneau qui ne le déplie pas — ni message, ni pile.
+    // `'unknown'` perd l'enrichissement DÉFINITIVEMENT pour les absents : c'est
+    // la panne qu'`onError` existe pour NOMMER.
+    logger.error('attachment-updated readership unresolvable — nothing live, nothing queued', error, { conversationId, messageId }),
   );
   if (readership.kind === 'unknown') return;
   const blocked = blockedReaderKeys(readership);

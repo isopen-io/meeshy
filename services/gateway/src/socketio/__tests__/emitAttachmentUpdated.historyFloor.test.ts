@@ -45,11 +45,33 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 import { emitAttachmentUpdated } from '../emitAttachmentUpdated';
 import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
+
+/**
+ * **Sans clé de signature, la branche du PLAN N'EXISTE PAS**, et c'est l'audit
+ * adversarial du lot qui l'a mesuré : `readerSignedPlanForMessageId` sort sur
+ * `if (!signer || …) return null` AVANT même de regarder la protection du
+ * message, si bien que `vueUnique: true` était un paramètre MORT et que les
+ * deux témoins du plan passaient par la diffusion chaînée comme les autres.
+ *
+ * Mesure : la garde `if (blocked.has(target.key)) continue;` retirée de la
+ * production laissait **29/30 témoins VERTS**. Un témoin qui ne peut pas
+ * tomber n'est pas un témoin — et celui-là gardait la branche la plus
+ * sensible, celle des pièces à vue unique et des flammes.
+ *
+ * Sa sœur `emitAttachmentUpdated.readerSigned.test.ts` posait déjà cette clé ;
+ * c'est le seul écart qui séparait un témoin porteur d'un témoin décoratif.
+ */
+beforeEach(() => {
+  process.env.ATTACHMENT_URL_SIGNING_KEY = Buffer.alloc(32, 1).toString('base64');
+});
+afterEach(() => {
+  delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+});
 
 const CONV = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const MSG = 'bbbbbbbbbbbbbbbbbbbbbbbb';

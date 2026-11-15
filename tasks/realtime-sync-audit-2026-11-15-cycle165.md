@@ -74,13 +74,29 @@ reprise des jours plus tard, donc l'enrichissement tire sur un message d'âge
 arbitraire. Il n'y a pas de fenêtre à gagner : il faut une pièce en attente et
 un invité entré entre-temps.
 
-Ce qui partait vers lui : la transcription Whisper entière, ses traductions
-NLLB, les URL des pistes TTS et l'adresse du fichier — **en direct sur ses deux
-rooms**, le handshake le mettant dans `conversation:<id>` sous
+Ce qui partait vers lui par CE canal : la transcription Whisper entière, ses
+traductions NLLB, les URL des pistes TTS et l'adresse du fichier — **en direct
+sur ses deux rooms**, le handshake le mettant dans `conversation:<id>` sous
 `PARTICIPATION_VIVANTE` seul — **plus une entrée Redis de 48 h sous sa clé** que
 le drain rejouait à sa reconnexion. Pendant ce temps `GET …/messages`, `/sync`,
 `conversation:updated` et `GET /attachments/:id` refusent tous ce message au
 même lecteur.
+
+> ## ⛔ CE LOT NE FERME QU'UN CANAL SUR TROIS — ne pas lire ce journal comme « l'invité ne reçoit plus la transcription »
+>
+> L'audit adversarial d'avant-fusion a mesuré deux canaux FRÈRES, non gardés,
+> **dans la même fonction**, qui partent AVANT celui-ci :
+> `transcription:ready` (`MeeshySocketIOManager.ts:2466`) et
+> `audio-translation:*` (`:2621`), tous deux en `io.to(roomName).emit(...)` nu,
+> portant le texte — et le second l'URL de la piste TTS. L'invité sous plancher
+> a donc **toujours** le texte intégral, servi une milliseconde avant la garde.
+> Consigné en **#18623**.
+>
+> **Pourquoi l'énumération de ce cycle ne pouvait pas les voir** : elle a
+> soustrait les appelants de la loi à `TEXT_BEARING_TABLE`, qui énumère les
+> familles **de la FILE**. Ces deux-là ne sont jamais enfilés, donc ne figurent
+> dans aucune table. **Une déclaration qui n'énumère qu'un TRANSPORT ne vérifie
+> que ce transport** — voir la leçon du jour, qui corrige la leçon 1 ci-dessous.
 
 > **La file faisait survivre la fuite à la déconnexion qui l'avait empêchée en
 > direct.** C'est la propriété la plus coûteuse de ce défaut, et la seule qu'un
@@ -125,6 +141,7 @@ fichiers.
 | preuve | résultat |
 |---|---|
 | ROUGE avant le correctif | **5 témoins de garde tombent**, les 5 de non-régression restent verts |
+| mutation par mutation (audit adversarial) | voir le tableau ci-dessous — un des cinq ne gardait RIEN |
 | `src/socketio` | 150 suites / 2475 témoins (149 / 2464 avant) |
 | `emitAttachmentUpdated*` | 3 suites / 29 témoins |
 | `services/messaging` + `routes/messages-writes` + `routes/conversations` | 40 suites / 622 témoins |
@@ -135,6 +152,35 @@ et le défaut rendent le même verdict**, la loi rendant `{kind:'room'}` sans ri
 restreindre. Un témoin posé là ne peut pas tomber — c'est la leçon 261, et c'est
 pourquoi les dix témoins se répartissent en cinq gardes et cinq
 non-régressions.
+
+### Le « 5 témoins tombent » était vrai en BLOC et faux sur un cinquième
+
+L'audit adversarial a muté les gardes **une par une**, ce que le ROUGE en bloc
+ne distingue pas :
+
+| mutation de production | témoins qui tombent |
+|---|---|
+| retirer `exceptRooms` | 3 — dont, **à tort**, celui du plan signé |
+| retirer `excludedQueueKeys` | 2 |
+| retirer `if (readership.kind === 'unknown') return;` | 2 |
+| retirer `if (blocked.has(target.key)) continue;` | **0** |
+
+La garde du plan signé par lecteur — celle qui protège la branche la plus
+sensible, les pièces à VUE UNIQUE et les flammes — **n'était gardée par rien**.
+Cause mesurée : le fichier de témoins ne posait pas
+`ATTACHMENT_URL_SIGNING_KEY`, donc `readerSignedPlanForMessageId` sortait sur
+`if (!signer …) return null` **avant même de regarder la protection du
+message** ; `vueUnique: true` était un paramètre MORT et les deux témoins du
+plan passaient par la diffusion chaînée comme les autres. Sa sœur
+`emitAttachmentUpdated.readerSigned.test.ts` posait déjà cette clé.
+
+Corrigé : une ligne d'environnement, et la mutation tombe désormais (1 échec).
+
+> **Un ROUGE en BLOC prouve qu'au moins une garde porte, jamais que chacune
+> porte.** Dix témoins, cinq gardes, cinq rouges : l'arithmétique avait l'air
+> d'une correspondance un-pour-un, et deux témoins tombaient pour la garde du
+> voisin. La mesure qui distingue est la mutation UNE PAR UNE — et elle est le
+> seul moyen de savoir laquelle des gardes est décorative.
 
 ## Ce que le cycle a trouvé et n'a PAS livré
 
@@ -152,14 +198,22 @@ journal : l'issue fait foi.
 
 ## Les deux leçons de méthode du cycle
 
-**1. Une énumération de sites se vérifie par la DÉCLARATION, pas par les
-appels.** La liste des familles porteuses de texte n'a pas été devinée : elle est
-écrite dans le dépôt (`TEXT_BEARING_TABLE`), et le défaut s'est trouvé en
-comparant cette déclaration aux appelants de la loi. Cinq déclarés, quatre
-inscrits — une soustraction, pas une intuition. C'est la forme outillée de la
-leçon 261 (« une énumération de sites porte DEUX affirmations ») : quand le
-dépôt porte déjà l'ensemble, la question « ai-je tous les sites ? » devient
-vérifiable.
+**1. Une énumération de sites se vérifie par la DÉCLARATION — et la déclaration
+n'énumère qu'UN TRANSPORT.** La liste des familles porteuses de texte n'a pas
+été devinée : elle est écrite dans le dépôt (`TEXT_BEARING_TABLE`), et le défaut
+s'est trouvé en comparant cette déclaration aux appelants de la loi. Cinq
+déclarés, quatre inscrits — une soustraction, pas une intuition.
+
+**Et la soustraction était juste dans sa langue, et aveugle hors d'elle.**
+`TEXT_BEARING_TABLE` énumère les familles de la **FILE**. `transcription:ready`
+et `audio-translation:*` ne sont jamais enfilés, donc ne figurent dans aucune
+table — la soustraction ne pouvait pas les rendre, et ils portent le même texte,
+à sept lignes du site corrigé (#18623). La leçon 261 disait qu'une énumération
+porte deux affirmations ; celle-ci en porte une troisième, muette : **« ces sites
+appliquent la règle », « ce sont les sites où elle s'applique », et "ce transport
+est le seul par lequel la donnée sort »**. La dernière est celle qui a tenu.
+
+Détail : `tasks/lessons/2026-11-15-une-declaration-qui-n-enumere-qu-un-transport-ne-verifie-que-ce-transport.md`.
 
 **2. Un commentaire juste peut décrire un site qui ne l'est pas.** La phrase qui
 nomme le défaut était déjà dans le dépôt, posée par le lot qui avait gardé
