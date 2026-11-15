@@ -1,6 +1,7 @@
 package me.meeshy.sdk.relation
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +44,10 @@ class SharedLocationSharingSyncTest {
         val receivedMarks: MutableMap<String, Boolean> = mutableMapOf(),
     ) {
         var servedSnapshot: SharedLocationOwnSnapshot? = null
+        var servedFailure: Exception? = null
+        var servedGate: CompletableDeferred<Unit>? = null
+        var account: String? = "me"
+        val writes = mutableListOf<String>()
         var startVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
         val connected = MutableStateFlow(false)
         val ownChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
@@ -78,17 +83,25 @@ class SharedLocationSharingSyncTest {
             permission = LocationPermissionGate { true },
             store = object : SharedLocationRosterStoring {
                 override fun load(accountId: String): String? = saved[accountId]
-                override fun save(accountId: String, stored: String?) { saved[accountId] = stored }
+                override fun save(accountId: String, stored: String?) {
+                    writes += "roster:$accountId"
+                    saved[accountId] = stored
+                }
                 override fun loadReceived(accountId: String): Boolean = receivedMarks[accountId] == true
-                override fun saveReceived(accountId: String, received: Boolean) { receivedMarks[accountId] = received }
+                override fun saveReceived(accountId: String, received: Boolean) {
+                    writes += "received:$accountId=$received"
+                    receivedMarks[accountId] = received
+                }
             },
-            accountId = { "me" },
+            accountId = { account },
             connected = connected,
             clock = { scope.currentTime },
             dispatcher = StandardTestDispatcher(scope.testScheduler),
             ownChanged = ownChanged,
             served = {
                 reads++
+                servedGate?.await()
+                servedFailure?.let { throw it }
                 servedSnapshot
             },
         )
@@ -236,5 +249,76 @@ class SharedLocationSharingSyncTest {
         relaunched.center.restore()
         runCurrent()
         assertThat(relaunched.following).isEqualTo(0)
+    }
+
+    @Test
+    fun `la marque recue s'ecrit avant la liste recue, un processus tue entre les deux se relance muet`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.writes).containsExactly("received:me=true", "roster:me").inOrder()
+    }
+
+    @Test
+    fun `une relecture qui leve ne tue pas la reconciliation des reconnexions suivantes`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedFailure = IllegalStateException("convertisseur")
+        device.connected.value = true
+        runCurrent()
+        device.connected.value = false
+        runCurrent()
+
+        device.servedFailure = null
+        device.servedSnapshot = served(alice to hour)
+        device.connected.value = true
+        runCurrent()
+
+        assertThat(device.reads).isEqualTo(2)
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+    }
+
+    @Test
+    fun `une relecture en vol pendant un changement de compte n'ecrit rien pour personne`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.restore()
+        runCurrent()
+        device.servedGate = CompletableDeferred()
+        device.servedSnapshot = served(alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        device.account = "other"
+        device.center.clear()
+        device.servedGate?.complete(Unit)
+        runCurrent()
+
+        assertThat(device.writes).isEmpty()
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `un arreter hors ligne gagne sur la liste servie et part a la reconnexion`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE)
+        device.center.stopSharing(bob)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+
+        device.startVerdict = SharedLocationStartVerdict.Started(0L)
+        device.servedSnapshot = served(alice to 8 * hour, bob to 8 * hour)
+        device.connected.value = true
+        runCurrent()
+
+        assertThat(device.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+        assertThat(device.center.roster.value.hasPendingWithdrawals).isFalse()
     }
 }

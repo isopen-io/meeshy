@@ -1252,3 +1252,28 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` refusionné à la main sans conflit ; gardes iOS texte et shared vertes sur le résultat.
 - **Fusion BLOQUÉE** : `dev` est verrouillée (`lock_branch`), la fusion rend `405 Cannot change this locked branch`. La
   PR #18715 est prête dès que le verrou est levé.
+
+## 2026-11-15 — réveil de 23 h : Android se recale sur le partage que la passerelle sert (#18578, moitié Android)
+
+- Reprise : la PR #18715 (moitié iOS) a été fusionnée par le porteur ; aucune PR cercles ouverte. `dev` est de nouveau
+  verrouillée (`lock_branch`). Aucune branche vivante n'écrit le centre de partage Android : lot réservé avant toute
+  écriture (`claude/cercles-18578-android`).
+- Lot : la moitié Android de #18578, iso iOS (#18715) et web (#18581). `:core:model` : `SharedLocationOwnSnapshotWire`
+  (personne illisible écartée, réponse sans liste lisible ⇒ `null`, « je ne sais pas »), `SharedLocationRoster.withServed`.
+  Réseau : `RelationsApi.ownSharedLocation` (`GET /relations/locations/mine`). Socket : `location:share-own-changed`
+  routé (`RelationSocketEventsManager.sharedLocationOwnChanged`). Centre : `sync()` à chaque socket accrochée (avant la
+  réconciliation) et à chaque annonce ; marque « reçue » gardée par compte (ni suivi, ni reprise au lancement, échéance
+  soldée sans envoi), levée seulement par un « Partager » accepté.
+- Gardes : cliquet des routes « à porter » 131 → 130 ; la garde de parité des événements ne compte plus Android absent
+  de `location:share-own-changed` (`vitest packages/shared/__tests__/ci` 24 fichiers, 204 verts) ; `jvm-check`
+  `*SharedLocation*` 57 verts.
+- Trouvé en chemin : `BatteryRosterSnapshotTest.kt` (lot batterie #14147) portait un « : » dans un nom de test ; la
+  compilation JVM des témoins de `:core:model` rompait sur `dev` (« Name contains illegal characters »). Corrigé dans
+  le lot (une virgule).
+- Audit adversarial avant PR : non bloquant. Corrigé dans le lot : la marque « reçue » s'écrit AVANT la liste reçue (un
+  processus tué entre les deux écritures se relançait en publiant), une relecture qui lève n'importe quelle exception
+  vaut « je ne sais pas » au lieu de tuer pour de bon le collecteur des reconnexions ; témoins ajoutés pour une relecture
+  en vol pendant un changement de compte et pour un « Arrêter » hors ligne qui gagne sur la liste servie. L'ordre
+  d'écriture est le même sur iOS : suivi ouvert.
+- Ce qui reste : #18714 (liste périmée republiée, deux appareils qui publient, permission iOS), #18580, #18431.
+  #18578 se ferme avec cette PR ; #18389 aussi (serveur, web, iOS et Android livrés).

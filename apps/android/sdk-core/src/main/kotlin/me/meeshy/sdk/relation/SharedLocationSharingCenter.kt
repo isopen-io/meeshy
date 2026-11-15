@@ -9,6 +9,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -246,21 +247,33 @@ class SharedLocationSharingCenter internal constructor(
      */
     suspend fun sync() {
         locked { ticket ->
-            val truth = served() ?: return@locked null
+            val truth = readServed() ?: return@locked null
             if (!isCurrent(ticket)) return@locked null
             val before = _roster.value
             val next = before.withServed(truth, clock())
             if (next == before) return@locked null
+            if (next.hasRecipients && !before.hasRecipients) markReceived(ticket, true)
             adopt(ticket, next)
             if (!next.hasRecipients) {
                 stopFollowingDevice()
                 markReceived(ticket, false)
-            } else if (!before.hasRecipients) {
-                markReceived(ticket, true)
             }
             scheduleDeadline()
             null
         }
+    }
+
+    /**
+     * Une relecture qui lève (quelle que soit l'exception) vaut « je ne sais pas » : elle ne tue jamais le collecteur des
+     * reconnexions, qui rejoue les retraits en attente. La marque « reçue » s'écrit AVANT la liste reçue : un processus tué
+     * entre les deux écritures se relance muet, jamais publiant.
+     */
+    private suspend fun readServed(): SharedLocationOwnSnapshot? = try {
+        served()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+        null
     }
 
     /**
