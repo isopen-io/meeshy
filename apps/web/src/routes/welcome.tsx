@@ -1,6 +1,9 @@
 import { AuthBrandFooter, AuthTitle } from '@/components/auth-chrome';
 import { AuthColumn } from '@/components/auth-column';
 import { AuthHeader } from '@/components/auth-header';
+import { useInterfaceLanguage } from '@/components/public-header';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { welcomeStore } from '@/lib/welcome';
 import { Link } from '@/routes/route-table';
 
@@ -15,18 +18,27 @@ import { Link } from '@/routes/route-table';
  * ("hasCompletedOnboarding")`, `MeeshyApp.swift:18, 37-39`) : les DEUX portes
  * SOLDENT l'accueil AU CLIC (`onClick`, jamais un `useEffect` de montage — un
  * visiteur qui ferme l'onglet ici le revoit, § 9 Q1 de la spécification).
+ *
+ * AUCUN TEXTE EN DUR (épure #17584) : la phrase d'accueil est `welcome.tagline`
+ * du lexique de l'épure (`docs/product/epure-lexique.md`), les deux portes
+ * portent les mots de l'écran de connexion (`login.createAccount`,
+ * `login.submit`), dans la langue que l'en-tête laisse choisir.
  */
 
 const CREATE_ACCOUNT_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-500), var(--ios-indigo-700))';
 
 export default function WelcomeScreen() {
+  return <WelcomeDoors language={useInterfaceLanguage()} />;
+}
+
+export function WelcomeDoors({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <AuthColumn className="items-center px-6 pb-10">
       <AuthHeader back="home" />
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <AuthTitle gradient="brand" />
         <p className="mt-3 px-8 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Écrivez dans votre langue. Tout le monde vous lit dans la sienne.
+          {translate(language, 'welcome.tagline')}
         </p>
       </div>
 
@@ -38,10 +50,10 @@ export default function WelcomeScreen() {
           className="grid place-items-center rounded-field font-bold text-ios-on-brand"
           style={{ minHeight: 52, background: CREATE_ACCOUNT_GRADIENT }}
         >
-          Créer un compte
+          {translate(language, 'login.createAccount')}
         </Link>
         <span id="welcome-create-account-hint" className="sr-only">
-          Ouvre le formulaire d’inscription
+          {translate(language, 'welcome.createAccount.hint')}
         </span>
 
         <Link
@@ -55,10 +67,10 @@ export default function WelcomeScreen() {
             color: 'var(--color-ios-ink)',
           }}
         >
-          Se connecter
+          {translate(language, 'login.submit')}
         </Link>
         <span id="welcome-sign-in-hint" className="sr-only">
-          Ouvre l’écran de connexion
+          {translate(language, 'welcome.signIn.hint')}
         </span>
       </div>
 

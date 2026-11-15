@@ -50,6 +50,11 @@ import {
   applyServedRepost,
   applyStoryChanged,
 } from './feed-realtime';
+/* LES DEUX CLÉS DU REJEU SOCIAL (#18641) — `feed-realtime.ts` ci-dessus tire
+   déjà `./feed` et `./stories` : les nommer ici n'ajoute AUCUN poids au chunk
+   `realtime`, seulement la capacité de les périmer. */
+import { FEED_QUERY_KEY } from './feed';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -1054,6 +1059,39 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     for (const queryKey of CATCH_UP_PERSONAL_FAMILIES) {
       void deps.queryClient.invalidateQueries({ queryKey });
     }
+    /* LE FIL SOCIAL ET LE RAIL DES STORIES AUSSI (#18641) — les dix `post:*`
+       et les six `story:*` que cette connexion écoute écrivent `FEED_QUERY_KEY`
+       et `STORY_TRAY_QUERY_KEY` (`feed-realtime.ts`), et RIEN ne les rattrapait
+       après une coupure du SEUL socket : `refetchOnReconnect` suit
+       `navigator.onLine`, qui ne bascule pas quand la passerelle redémarre, et
+       `staleTime` périme sans rejouer — une requête MONTÉE n'a alors aucun
+       déclencheur. Ces deux-là sont exactement les surfaces qu'on peut REGARDER
+       pendant la coupure ; les autres caisses de cartes (favoris, auteur,
+       communauté, hashtag, commentaires) se rejoignent par une navigation, donc
+       par un montage, donc par une relecture — elles se soignent seules.
+
+       `exact` sur le fil : `['feed', 'new-count']` est un ENTIER qui partage sa
+       racine (`feed-new-count.ts`), et TanStack compare par PRÉFIXE. Même règle
+       qu'au #6974 — nommer la famille, jamais balayer la racine.
+
+       LE FIL DES RÉELS RESTE DEHORS, par décision : `card-caches.ts` le déclare
+       `frozen: true` (D-66) — son ordre est gelé, il ne se relit ni au focus ni
+       à la reconnexion. */
+    void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
+    void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+    /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
+       est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
+       ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
+       differe deja. Les quatre `category:*` que cette connexion ecoute
+       n'ecrivent que cette cle, et les onglets qu'elle sert vivent sur l'ecran
+       de la liste — donc MONTES pendant la coupure, comme le fil et le rail.
+       iOS la rehydrate sur le meme signal (`didReconnect` →
+       `categoryStore.hydrate()`, « to resync server-side deletions »).
+
+       Ces deux cles voisines sont le piege que ce lot a failli rejouer : une
+       enumeration affirme AUSSI qu'elle est complete, et celle-ci s'etait
+       arretee a ce qui RESSEMBLAIT au defaut (des caisses de cartes). */
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
   };
 
   /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */

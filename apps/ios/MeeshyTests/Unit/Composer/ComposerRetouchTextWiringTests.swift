@@ -18,8 +18,12 @@ final class ComposerRetouchTextWiringTests: XCTestCase {
     func test_theLayer_mountsTheComposerCanvasAndToolbar_withTheBakedProfile() throws {
         let code = try source("ComposerEditTextLayer.swift")
         XCTAssertTrue(code.contains("StoryComposerCanvasView("))
-        XCTAssertTrue(code.contains("StoryTextEditToolbar(viewModel:board.scene"))
+        XCTAssertFalse(code.contains("StoryTextEditToolbar("), "plus de barre flottante : celle du composer, collée au clavier (#18640)")
+        XCTAssertTrue(code.contains("ComposerKeyboardDock.live()"))
+        XCTAssertTrue(code.contains("inlineEditInputLink:dock.link"), "la barre monte avec le clavier du canvas")
         XCTAssertTrue(code.contains("profile:.bakedIntoMedia"), "pas de « Langue » sur un texte cuit")
+        XCTAssertTrue(code.contains("Color.black.opacity(ComposerViewfinderScene.typingVeilOpacity).ignoresSafeArea()"),
+                      "le voile couvre la prise entière, jamais le rectangle de la scène")
         XCTAssertTrue(code.contains("paintsSceneBackground:false"), "le canvas est transparent : le média se voit à travers")
         XCTAssertFalse(code.contains(".language"))
     }

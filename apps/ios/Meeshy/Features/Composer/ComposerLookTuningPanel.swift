@@ -61,11 +61,14 @@ struct ComposerLookTuningToggle: View {
 
 /// **La dose de l'ambiance et le pavé chaleur × contraste** (OPUS-2, doc 08 § R6).
 /// Le look en direct suit chaque mouvement : le viseur EST l'aperçu du réglage.
+/// **Un fond PLEIN** (#18639) : ni la bande, ni le rail, ni
+/// l'image ne transparaissent sous ses mots.
 struct ComposerLookTuningPanel: View {
     let look: ComposerPhotoLook
     let onChange: (ComposerLookTuning) -> Void
 
     static let padSide: CGFloat = 96
+    static let backdropOpacity: Double = 0.94
 
     var body: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
@@ -86,17 +89,20 @@ struct ComposerLookTuningPanel: View {
                         .accessibilityValue(look.tuning.intensity.formatted(.percent.precision(.fractionLength(0))))
                 }
                 if look.tuning != .neutral {
-                    Button(ComposerCaptureCopy.ambianceReset) { onChange(.neutral) }
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(minHeight: MeeshyControlSize.tapTarget)
+                    CallFrameMoodChip(title: ComposerCaptureCopy.ambianceReset, isSelected: false) {
+                        HapticFeedback.light()
+                        onChange(.neutral)
+                    }
                 }
             }
             .frame(maxWidth: 180, alignment: .leading)
         }
         .padding(MeeshySpacing.sm)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-            .fill(Color.black.opacity(0.5)))
+            .fill(Color.black.opacity(Self.backdropOpacity)))
+        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        .environment(\.colorScheme, .dark)
     }
 }
 

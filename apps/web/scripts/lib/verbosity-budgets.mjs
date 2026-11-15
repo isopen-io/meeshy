@@ -62,12 +62,29 @@ const ratchetProblems = ({ budgets, previous, socle }) =>
     return [];
   });
 
+const socleReleveProblem = ({ name, releve, socleView, previousView }) => {
+  const frozen = `${name} : le budget d’avant l’épure (${pair(previousView)}) ne se réécrit pas — il est le plafond des relèvements`;
+  if (releve === undefined || socleView === undefined) return frozen;
+  if (Object.keys(COUNTERS).some((key) => socleView[key] < previousView[key])) return frozen;
+  if (typeof releve.motif !== 'string' || releve.motif.trim() === '') return `${name} : plafond relevé sans motif — dis quel repère l’avant-épure ne portait pas`;
+  if (!Number.isInteger(releve.issue) || releve.issue <= 0) return `${name} : plafond relevé sans issue — inscris le numéro de l’issue qui le porte`;
+  if (!sameView(releve.de, previousView)) return `${name} : le relèvement du plafond part de ${pair(releve.de)}, le plafond de la base est ${pair(previousView)}`;
+  if (!sameView(releve.a, socleView)) return `${name} : le relèvement du plafond annonce ${pair(releve.a)}, le plafond inscrit est ${pair(socleView)}`;
+  return null;
+};
+
+/**
+ * Le plafond ne se réécrit pas — sauf RELÈVEMENT MOTIVÉ (#17584, verdict du 2026-11-15) : `releves["<vue>"] = { de, a, motif, issue }`
+ * dans `verbosity-socle.json`, quand un repère légitime (un titre d'écran, un dernier usage) manquait AVANT l'épure. Il ne baisse jamais.
+ */
 export const socleProblems = ({ socle, previousSocle }) =>
   previousSocle === null
     ? []
-    : Object.entries(previousSocle.views).flatMap(([name, previousView]) =>
-        sameView(socle.views[name], previousView) ? [] : [`${name} : le budget d’avant l’épure (${pair(previousView)}) ne se réécrit pas — il est le plafond des relèvements`],
-      );
+    : Object.entries(previousSocle.views).flatMap(([name, previousView]) => {
+        if (sameView(socle.views[name], previousView)) return [];
+        const problem = socleReleveProblem({ name, releve: socle.releves?.[name], socleView: socle.views[name], previousView });
+        return problem === null ? [] : [problem];
+      });
 
 export const verbosityProblems = ({ listed, measured, budgets, previous, socle = null }) => [
   ...listed.flatMap((name) => listedProblems({ name, measured, budgets })),

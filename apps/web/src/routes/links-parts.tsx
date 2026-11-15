@@ -243,12 +243,12 @@ export function ShareLinkRow({
                 · {statusLabel(language, false)}
               </span>
             )}
-            {link.conversationTitle === null ? null : (
-              <span data-share-link-conversation className="truncate" style={{ color: INK_2 }}>
-                · {link.conversationTitle}
-              </span>
-            )}
           </span>
+          {link.conversationTitle === null ? null : (
+            <span data-share-link-conversation className="line-clamp-2 break-words text-caption" style={{ color: INK_2 }}>
+              {link.conversationTitle}
+            </span>
+          )}
           <LinkCreated language={language} createdAt={link.createdAt} />
           {expiry === null ? null : (
             <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>

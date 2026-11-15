@@ -460,6 +460,7 @@ const PRIVACY_TOGGLES = [
     key: 'showOnlineStatus',
     label: 'settings.privacy.online_status',
     caption: 'settings.privacy.online_status.info',
+    note: { question: 'settings.privacy.online_status.question', text: 'settings.privacy.online_status.more' },
     icon: { set: 'ecran', name: 'circle' },
     tint: 'var(--color-success)',
   },
@@ -667,7 +668,7 @@ export function AppearanceSection({
         <RowIcon tint="var(--ios-indigo-400)">
           <Glyph name="translate" size={15} />
         </RowIcon>
-        <RowText label={translate(language, 'settings.content_languages')} />
+        <RowText label={translate(language, 'settings.content_languages')} caption={translate(language, 'settings.content_languages.info')} />
         {primaryLanguage === null ? null : (
           <span lang={primaryLanguage} className="shrink-0 text-caption font-medium" style={{ color: SECTION_INK_2 }}>
             {endonym(primaryLanguage)}

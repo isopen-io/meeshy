@@ -24,6 +24,7 @@ import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/acc
 import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
 import { translate } from '@/lib/i18n-catalog';
 import { useInterfaceLanguage } from '@/components/public-header';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AuthHeader } from '@/components/auth-header';
 import { AuthSiteFooter } from '@/components/auth-site-footer';
 
@@ -146,6 +147,14 @@ const LOGIN_BACK = __SHELL__ ? 'welcome' : 'home';
  * la connexion d'un lecteur qui n'a rien à apprendre n'en paie que l'appel.
  */
 const SessionEndNotice = lazy(() => import('@/components/session-end-notice'));
+
+function LoginTitle({ language, level: Level }: { readonly language: InterfaceLanguage; readonly level: 'h1' | 'h2' }) {
+  return (
+    <Level data-login-title className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      {translate(language, 'login.title')}
+    </Level>
+  );
+}
 
 export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?: MagicLinkPanelDeps } = {}) {
   const [search] = useSearch();
@@ -340,6 +349,12 @@ export function LoginDoors({
             Meeshy — et l'écran tient entier (`check-phone-frame.mjs`). Le
             second facteur, sans carte, le garde. */}
         {requires2FA || (method === 'password' && !shortViewport) ? <AuthTitle gradient="login" /> : null}
+
+        {/* L'ÉCRAN SE NOMME (épure #17584, règle 7, verdict du 2026-11-15) : « Connexion ».
+            #6583 avait retiré le blason parce qu'il redisait le PRODUIT ; ce titre dit
+            l'ÉCRAN, que rien ne nommait plus à qui arrive par un lien profond. Il est le
+            titre de premier niveau là où le blason se tait, de second niveau sous lui. */}
+        {requires2FA ? null : <LoginTitle language={language} level={method === 'password' && !shortViewport ? 'h2' : 'h1'} />}
 
         {requires2FA ? null : (
           <Suspense fallback={null}>
