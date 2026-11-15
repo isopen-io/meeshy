@@ -115,6 +115,54 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * passerelle ne peut pas deviner ce qu'un écran montre.
  */
 
+/**
+ * **LES FAMILLES PERSONNELLES QU'UNE SURDITÉ DU SOCKET PREND EN ENTIER**
+ * (#6288, #6321, #6974, #7378, #18573).
+ *
+ * Déclarées ICI, une fois, parce que les DEUX rattrapages d'`onAuthenticated`
+ * les doivent — la reconnexion comme la première connexion. Elles étaient
+ * épelées dans la seule branche de reconnexion, et trois lots de suite y ont
+ * ajouté la leur sans voir l'autre branche : c'est cette absence de liste, et
+ * non un arbitrage, qui a laissé la cloche mentir après chaque démarrage à
+ * froid (#18573).
+ *
+ * Chacune porte sa propre raison, et aucune n'est la racine de sa voisine :
+ *
+ * - **les LISTES de la cloche** (#6288) parce qu'aucun gestionnaire n'a vu les
+ *   lignes de l'intervalle. À la DIFFÉRENCE de `notifications-realtime.ts:92`
+ *   (`refetchType: 'none'`, qui a déjà écrit la ligne dans le cache), il faut
+ *   ici un vrai refetch : il n'y a rien d'écrit à réconcilier ;
+ * - **les COMPTES de la cloche** (#6974) parce que rien d'autre ne les
+ *   rafraîchit à cet instant — mesuré : leur unique lecteur
+ *   (`use-notification-counts.ts`) ne relit que sur FOCUS de fenêtre, et ni une
+ *   coupure du seul socket ni un démarrage à froid n'en produit un (le
+ *   navigateur n'a jamais cessé d'être « en ligne », et la fenêtre est déjà au
+ *   premier plan) ;
+ * - **les DEMANDES D'AMITIÉ** (#6321) parce qu'une demande reçue dans
+ *   l'intervalle n'a atteint aucun socket, et que la pastille du barreau
+ *   « Découvrir » la compterait trop tard ;
+ * - **les MESSAGES FAVORIS** (#7378) parce qu'un `message:starred` posé depuis
+ *   un AUTRE appareil dans l'intervalle n'a atteint aucun socket, et que
+ *   l'étoile du fil mentirait jusqu'à la prochaine relecture.
+ *
+ * Les deux familles de la cloche sont NOMMÉES plutôt que leur racine
+ * `['notifications']` balayée : c'est refuser d'emporter la prochaine requête
+ * qu'on rangera sous cette racine sans l'avoir décidé — la garde
+ * `socket.test.ts` y tient une sentinelle.
+ *
+ * Les CONVERSATIONS n'y figurent pas, et ce n'est pas un oubli : les deux
+ * branches n'en prennent pas la même portée. Une coupure invalide la racine
+ * entière (la liste, la case, la page du fil) ; la première connexion n'en
+ * prend que la liste et le fil VIVANT, parce que ni la case ni une fenêtre
+ * ancrée ne sont nourries par ce que l'intervalle a emporté (#7420).
+ */
+const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
+  NOTIFICATION_LISTS_KEY,
+  NOTIFICATION_COUNTS_QUERY_KEY,
+  FRIENDS_QUERY_PREFIX,
+  STARRED_MESSAGES_QUERY_ROOT,
+];
+
 /** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
  * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
  * chargé sans qu'il manque quoi que ce soit (#9291). */
@@ -991,10 +1039,17 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * point de contrôle (`ConversationSyncEngine+Socket.swift:12-25`) ; ici, le
    * rejeu est une INVALIDATION TanStack — `GET /sync` est un lot séparé.
    *
-   * La PREMIÈRE authentification ne relit que la liste et le fil DÉJÀ servis
-   * (#10573) : le socket se branche après la première peinture, et ce qui est
-   * parti entre la lecture REST et l'entrée dans les rooms était perdu. Une
-   * requête encore en vol n'est jamais doublée (`catchUpFirstAuthentication`).
+   * La PREMIÈRE authentification prend la MÊME fenêtre, et donc les MÊMES
+   * familles (#18573) : le socket se branche après la première peinture, et ce
+   * qui est parti entre la lecture REST et l'entrée dans les rooms était perdu.
+   * Elle n'en relisait qu'une — la liste et le fil (#10573) — parce que la
+   * liste des familles n'existait nulle part : #6288, #6321 et #7378 ont chacun
+   * ajouté la sienne à la branche de RECONNEXION seule, et une liste qu'il faut
+   * retaper à chaque branche est une liste qu'une branche finira par ne pas
+   * avoir. Elle est déclarée une fois (`CATCH_UP_PERSONAL_FAMILIES`), et la
+   * seule différence entre les deux branches reste le PRÉDICAT : une requête
+   * encore en vol n'est jamais doublée au démarrage à froid
+   * (`catchUpFirstAuthentication`), là où une coupure les relit toutes.
    *
    * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
    * authentification, la première comprise : un écran ouvert avant que la
@@ -1007,7 +1062,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
-      catchUpFirstAuthentication(deps.queryClient);
+      catchUpFirstAuthentication(deps.queryClient, CATCH_UP_PERSONAL_FAMILIES);
       return;
     }
     /* UNE invalidation couvre les TROIS familles : TanStack compare les clés
@@ -1016,34 +1071,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-    /* LA CLOCHE AUSSI (#6288), PAR FAMILLE NOMMÉE (#6974) : une notification
-       émise pendant la coupure n'a jamais atteint ce socket, et
-       `notification:counts` ne se rejoue pas.
-
-       Les DEUX lignes, et chacune pour sa propre raison — c'est ce que la
-       racine `['notifications']` disait en une seule sans le dire :
-       - les LISTES parce qu'aucun gestionnaire n'a vu les lignes de
-         l'intervalle. À la DIFFÉRENCE de `notifications-realtime.ts:92`
-         (`refetchType: 'none'`, qui a déjà écrit la ligne dans le cache), il
-         faut ici un vrai refetch : il n'y a rien d'écrit à réconcilier ;
-       - les COMPTES parce que rien d'autre ne les rafraîchit à cet instant
-         (mesuré : leur unique lecteur, `use-notification-counts.ts`, ne relit
-         que sur focus de fenêtre, et une coupure du SEUL socket n'en produit
-         aucun — le navigateur n'a jamais cessé d'être « en ligne »).
-
-       Nommer les deux plutôt que balayer leur racine, c'est refuser d'emporter
-       la prochaine requête qu'on rangera sous `['notifications']` sans l'avoir
-       décidé — la garde `socket.test.ts` y tient une sentinelle. */
-    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY });
-    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY });
-    /* LES DEMANDES D'AMITIÉ AUSSI (#6321) : une demande reçue pendant la
-       coupure n'a jamais atteint ce socket, et la pastille du barreau
-       « Découvrir » la compterait trop tard. */
-    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
-    /* LES MESSAGES FAVORIS AUSSI (#7378) : un `message:starred` émis pendant
-       la coupure n'a jamais atteint ce socket, et l'étoile du fil mentirait
-       jusqu'à la prochaine relecture. L'ensemble ET la liste de l'écran. */
-    void deps.queryClient.invalidateQueries({ queryKey: STARRED_MESSAGES_QUERY_ROOT });
+    /* Les familles PERSONNELLES, toutes, sans prédicat : la coupure prouve que
+       ce socket n'a rien vu de l'intervalle. */
+    for (const queryKey of CATCH_UP_PERSONAL_FAMILIES) {
+      void deps.queryClient.invalidateQueries({ queryKey });
+    }
   };
 
   /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */

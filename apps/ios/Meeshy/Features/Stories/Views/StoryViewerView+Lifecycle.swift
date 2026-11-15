@@ -46,6 +46,7 @@ extension StoryViewerView {
             // `observeAudioSessionEvents` (interruption began/ended). Pas
             // besoin de basculer la UI mute pour ça.
         }
+        StoryNavigationTrace.shared?.beginSession()
         installPrefetchPipelineIfNeeded()
         startTimer()
         prefetchCurrentGroup()
@@ -75,6 +76,7 @@ extension StoryViewerView {
         // Coupe le CADisplayLink 60 Hz, libère les callbacks qui capturent
         // l'état du viewer, annule les préchargements et rend les canvases ;
         // le pipeline se ré-installe au prochain onAppear.
+        StoryNavigationTrace.shared?.endSession()
         playback.tearDown()
         // Purge l'état gestuel transient : quitté en plein drag, le lecteur
         // ne reçoit jamais `onEnded`, et la réouverture démarrait avec un axe

@@ -33,7 +33,12 @@ import {
   type TogetherStartedEventData,
   type TogetherSyncAck,
 } from '@meeshy/shared/types/together';
-import type { ServerEmitIO } from '../../socketio/serverEmit';
+import {
+  emitServerEvent,
+  type ServerEmitIO,
+  type ServerEventName,
+  type ServerEventPayload,
+} from '../../socketio/serverEmit';
 import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './togetherGate';
 import { guestReceivesInvitesFrom, takeTogetherInviteSlot, type TogetherReceptionDb } from './togetherReception';
 import {
@@ -83,10 +88,32 @@ const UNAVAILABLE = refusal(TOGETHER_ERROR_CODES.UNAVAILABLE, 'Lecture ensemble 
 
 const randomSessionId = (): string => randomBytes(16).toString('hex');
 
-const emitTo = (io: TogetherIo | undefined, userIds: readonly string[], event: string, data: unknown): void => {
+/**
+ * Sert UNE émission aux rooms personnelles nommées, le couple (événement, charge) CORRÉLÉ.
+ *
+ * La rédaction d'avant prenait `event: string` / `data: unknown` et les passait en
+ * `event as never, data as never` (#18649). Le porteur était pourtant la BONNE porte
+ * (`ServerEmitIO`, dérivée de `ServerToClientEvents`) : c'est l'ARGUMENT qui la
+ * neutralisait, et les trois discriminants de `server-emit-door-sweep` regardent tous
+ * le RECEVEUR — aucun ne pouvait le voir, et l'inventaire était vert. Les quatre
+ * émissions d'« Ensemble » voyageaient donc hors de tout contrat : ni nom ni forme
+ * confrontés, sur un canal qui n'a AUCUN sérialiseur pour rattraper l'écart.
+ *
+ * Le paramètre générique `E` porte la corrélation jusqu'au site d'appel, où elle se
+ * vérifie sur un nom CONCRET ; l'effacement reste là où le dépôt l'a nommé une fois
+ * pour toutes, dans `emitServerEvent`.
+ */
+const emitTo = <E extends ServerEventName>(
+  io: TogetherIo | undefined,
+  userIds: readonly string[],
+  event: E,
+  data: ServerEventPayload<E>,
+): void => {
   userIds.forEach((userId) => {
+    const target = io?.to(ROOMS.user(userId));
+    if (!target) return;
     try {
-      io?.to(ROOMS.user(userId)).emit(event as never, data as never);
+      emitServerEvent(target, event, data);
     } catch {
       /* l'état est déjà écrit : un événement perdu se rattrape au geste suivant */
     }

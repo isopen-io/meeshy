@@ -60,7 +60,7 @@ final class PhoneChangeFlowModel: ObservableObject {
     // MARK: - Étapes
 
     func beginEditing() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(MeeshyAnimation.springFast) {
             step = .editing
         }
     }
@@ -81,7 +81,10 @@ final class PhoneChangeFlowModel: ObservableObject {
         await sendCode()
     }
 
+    /// Un envoi à la fois : deux touchers rapprochés enverraient deux SMS, et
+    /// le second code invaliderait le premier.
     func sendCode() async {
+        guard !isSending else { return }
         isSending = true
         error = nil
         defer { isSending = false }

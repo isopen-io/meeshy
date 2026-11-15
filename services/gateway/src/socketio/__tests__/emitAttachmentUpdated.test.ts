@@ -119,10 +119,18 @@ describe('emitAttachmentUpdated — the live audience', () => {
     expect(emitted).toHaveLength(1);
   });
 
-  it('still emits to the conversation room when the participant lookup fails', async () => {
+  it('still emits to the conversation room when the AUDIENCE lookup alone fails', async () => {
+    // Deux pannes distinctes vivaient sous un double qui faisait LEVER toute
+    // requête participant, et elles s'arbitrent à l'OPPOSÉ (#18613). Celle-ci
+    // est la liste des rooms personnelles : la loi du plancher, elle, a
+    // répondu — personne n'est arrivé après le message — donc toute la room a
+    // le droit de lire, et dégrader vers elle ne sert rien à personne sans
+    // droit. Le double ne fait donc tomber QUE la requête d'audience (celle
+    // dont le `select` ne porte pas les colonnes de plancher).
     const { emitted, deps } = makeDeps(THREE, [], {
-      findMany: jest.fn(async () => {
-        throw new Error('mongo down');
+      findMany: jest.fn(async (args: any) => {
+        if (!args?.select?.joinedAt) throw new Error('mongo down');
+        return [];
       }),
     });
 
@@ -132,6 +140,23 @@ describe('emitAttachmentUpdated — the live audience', () => {
     // sitting IN the conversation are the ones watching the media right now.
     expect(emitted).toHaveLength(1);
     expect(emitted[0].rooms).toEqual(['conversation:conv-1']);
+  });
+
+  it("n'émet RIEN quand c'est la LOI du plancher qui tombe", async () => {
+    const { emitted, enqueued, deps } = makeDeps(THREE, [], {
+      findMany: jest.fn(async () => {
+        throw new Error('mongo down');
+      }),
+    });
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    // L'autre moitié de l'arbitrage ci-dessus, posée ici pour que les deux se
+    // lisent côte à côte : une loi illisible ne dit NI qui est bloqué, NI qui
+    // est autorisé, et la room contient peut-être un lecteur sous plancher.
+    // Détail et non-régression par audience : `emitAttachmentUpdated.historyFloor.test.ts`.
+    expect(emitted).toEqual([]);
+    expect(enqueued).toEqual([]);
   });
 });
 
@@ -181,7 +206,12 @@ describe('emitAttachmentUpdated — the offline audience', () => {
 
     await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
 
-    expect(findMany).toHaveBeenCalledTimes(1);
+    // Compté sur la requête d'AUDIENCE, pas sur l'appel : la loi du plancher
+    // ouvre ses propres lectures (#18613), et les compter ensemble ferait de ce
+    // témoin un compteur de requêtes au lieu d'une garde contre la seconde
+    // lecture de la MÊME liste pour alimenter la file.
+    const audience = (findMany as any).mock.calls.filter(([args]: [any]) => !args?.select?.joinedAt);
+    expect(audience).toHaveLength(1);
   });
 
   it('never throws when the queue is down — the live emit already happened', async () => {

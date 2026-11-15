@@ -69,14 +69,27 @@ public final class AudioTrackActivator {
     }
 
     private func setAudioTracks(on item: AVPlayerItem, effectiveMuted: Bool) {
-        guard AudioTrackActivationLaw.mayTouchTracks(itemStatus: item.status) else { return }
-        let tracks = item.tracks
-        let states = tracks.map {
-            AudioTrackActivationLaw.TrackState(mediaType: $0.assetTrack?.mediaType, isEnabled: $0.isEnabled)
-        }
-        zip(tracks, AudioTrackActivationLaw.writes(for: states, effectiveMuted: effectiveMuted))
-            .forEach { track, write in
-                if let write { track.isEnabled = write }
-            }
+        guard AudioTrackActivationLaw.mayTouchTracks(itemStatus: item.status),
+              let write = AudioTrackActivationLaw.trackWrite(appliedMuted: item.meeshyAppliedAudioMute,
+                                                             effectiveMuted: effectiveMuted) else { return }
+        item.tracks
+            .filter { AudioTrackActivationLaw.desiredEnabled(mediaType: $0.assetTrack?.mediaType, effectiveMuted: effectiveMuted) != nil }
+            .forEach { $0.isEnabled = write }
+        item.meeshyAppliedAudioMute = effectiveMuted
+    }
+}
+
+/// L'état que Meeshy a écrit sur les pistes audio d'un élément : il voyage
+/// avec l'élément, d'un activateur à l'autre et à travers le pool (#18511).
+@MainActor
+private enum AppliedAudioMute {
+    static let byItem = NSMapTable<AVPlayerItem, NSNumber>.weakToStrongObjects()
+}
+
+extension AVPlayerItem {
+    @MainActor
+    var meeshyAppliedAudioMute: Bool? {
+        get { AppliedAudioMute.byItem.object(forKey: self)?.boolValue }
+        set { AppliedAudioMute.byItem.setObject(newValue.map(NSNumber.init(value:)), forKey: self) }
     }
 }
