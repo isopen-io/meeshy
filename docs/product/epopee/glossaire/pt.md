@@ -101,7 +101,7 @@ O tom: o jogo trata o herói por **você** (português do Brasil), nunca por « 
 
 ### A Herança (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
 
-- **O que é**: as moedas guardadas para a linhagem. **Cunhar uma Meesh cristaliza uma parte da sua luz numa moeda numerada**: sua luz, e portanto seu nível, baixa na mesma medida; o que foi recebido continua recebido.
+- **O que é**: as moedas guardadas para a linhagem. **Cunhar uma Meesh cristaliza uma parte da sua luz numa moeda numerada**, guardada para sempre; seu nível acompanha a luz que lhe resta, e **nenhum texto apresenta essa descida como uma perda** (#17394); o que foi recebido continua recebido.
 - **A ficha das Meeshes** se chama « A Herança ».
 - **Os recipientes** (inalterados): Bolsa (1), Escarcela (10), Cofrinho (50), Baú (100, título Voz I), Tesouro (500, Poliglota III), Reserva (1.000, Embaixador III).
 - **As edições**: prata; ouro (a cada centésima); prisma (a cada milésima).

@@ -70,7 +70,7 @@ describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #1
     expect(rules[1]?.body).toContain('ton niveau se lit sur elle');
     expect(rules[1]?.body).not.toContain('Une frappe en fige une part');
     expect(rules[2]?.body).toContain('une part de ta lumière s’y fige');
-    expect(rules[3]?.body).toContain('ton niveau baisse d’autant');
+    expect(rules[3]?.body).toContain('ton niveau suit la lumière qui te reste');
     expect(rules[3]?.body).toContain('Ton rang et tes médailles ne baissent pas');
   });
 

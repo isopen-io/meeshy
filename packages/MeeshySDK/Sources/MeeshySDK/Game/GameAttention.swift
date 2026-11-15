@@ -37,3 +37,48 @@ public struct GameAttention: Equatable, Sendable {
     /// Au moins un signal à montrer.
     public var isRaised: Bool { chestReady || flameAtRisk }
 }
+
+// MARK: - Le bandeau revient quand quelque chose change (#17366, retouche 3)
+//
+// MIROIR de `bannerRecall` (`packages/shared/utils/game/banner-recall.ts`) et de `GameBannerRecall` Android
+// (`apps/android/core/model/.../game/GameBannerRecall.kt`), rejoués sur les mêmes cas.
+//
+// Hors de l'ouverture de l'app, le bandeau du joueur revient quelques secondes quand deux lectures successives du bloc
+// servi disent qu'un acte vient d'être réalisé, que l'Offrande vient d'être prête ou que la Flamme vient de passer à
+// risque. Un signal déjà levé ne rappelle pas deux fois ; ce qui retombe ne rappelle rien ; la première lecture non
+// plus. Aucune notification n'en découle (#17368).
+
+/// Ce que le bandeau compare d'une lecture à l'autre.
+public struct GameBannerMoment: Equatable, Sendable {
+    public let actsDone: Int
+    public let attention: GameAttention
+
+    public init(actsDone: Int, attention: GameAttention) {
+        self.actsDone = actsDone
+        self.attention = attention
+    }
+
+    public static func of(_ game: GameBlock?, hidden: Bool) -> GameBannerMoment? {
+        guard !hidden, let game else { return nil }
+        return GameBannerMoment(actsDone: GameActsRing.of(game, hidden: false)?.done ?? 0,
+                                attention: GameAttention.of(game, hidden: false))
+    }
+}
+
+public enum GameBannerRecall: Equatable, Sendable {
+    case offeringReady
+    case act
+    case flameAtRisk
+
+    /// Le temps pendant lequel le bandeau rappelé reste à l'écran (`PLAYER_BANNER_RECALL_MS` du web).
+    public static let seconds: Double = 5
+
+    /// Ce qui vient de naître entre deux lectures, par ordre d'importance ; `nil` ⇒ le bandeau ne revient pas.
+    public static func reason(before: GameBannerMoment?, after: GameBannerMoment?) -> GameBannerRecall? {
+        guard let before, let after else { return nil }
+        if after.attention.chestReady && !before.attention.chestReady { return .offeringReady }
+        if after.actsDone > before.actsDone { return .act }
+        if after.attention.flameAtRisk && !before.attention.flameAtRisk { return .flameAtRisk }
+        return nil
+    }
+}

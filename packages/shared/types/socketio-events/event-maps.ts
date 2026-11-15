@@ -98,6 +98,7 @@ import type {
   CallTranslationRequestEvent,
   CallTranslationRequestedEvent,
   CallTranslationResponseEvent,
+  CallSignalAck,
 } from '../video-call.js';
 import type {
   CallRecordingAck,
@@ -662,7 +663,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallSignalAck) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_SCREEN]: (data: CallMediaToggleClientEvent) => void;

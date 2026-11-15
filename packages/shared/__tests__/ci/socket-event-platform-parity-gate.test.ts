@@ -64,8 +64,6 @@ const ASYMETRIES: readonly {
       "chantier 2.0 : `apps/web` suit l'interface iOS (directive porteur 2026-09-07) et ces signaux temps réel "
       + "ne sont pas encore portés. Aucun n'est un défaut en soi ; la liste ne doit que rétrécir.",
     events: [
-      'audio:transcription-failed',
-      'audio:translation-failed',
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',

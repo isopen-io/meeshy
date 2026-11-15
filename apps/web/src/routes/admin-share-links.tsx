@@ -125,7 +125,7 @@ export function AdminShareLinksPanel({ language, deps = apiDeps, now = defaultNo
             {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.shareLink.list.count', { count: formatCount(total, language) }) })}
           />
         }
-        empty={{ title: translateAdmin(language, 'admin.shareLink.list.empty'), hint: translateAdmin(language, 'admin.shareLink.list.emptyHint') }}
+        empty={{ title: translateAdmin(language, 'admin.shareLink.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.shareLink.list.filteredEmpty') }}
       />
     </div>

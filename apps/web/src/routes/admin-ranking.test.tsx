@@ -212,6 +212,15 @@ describe('les genres d’entité — chacun nomme les siens', () => {
     expect(rowText(host, OBJECT_ID(4))).toContain('Créateur 4');
   });
 
+  test('un classement de liens dit au repos que la période retient les liens CRÉÉS, pas les clics', async () => {
+    const { deps } = scripted(() => served([servedTrackingRank(1)]));
+    const host = await open(deps, '/admin/ranking?entity=links');
+
+    const notice = host.querySelector('[data-admin-notice="info"]');
+    expect(notice?.textContent).toContain('La période retient les liens créés pendant cette durée');
+    expect(notice?.closest('.sr-only')).toBeNull();
+  });
+
   test('les liens de partage : leur nom, ou « Lien sans nom » — jamais leur identifiant', async () => {
     const { deps } = scripted(() =>
       served([servedShareRank(1, { identifier: 'mshy_secret_join', linkId: 'SECRET-LINK-ID' }), servedShareRank(2, { name: null }), servedShareRank(3)]),
