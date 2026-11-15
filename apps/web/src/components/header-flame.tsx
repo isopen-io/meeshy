@@ -102,7 +102,7 @@ export function HeaderFlame({
           aria-label={label}
           aria-expanded={cardOpen}
           aria-controls={cardOpen ? cardId : undefined}
-          className="header-flame-mark pointer-events-auto text-mini"
+          className="btn-press header-flame-mark pointer-events-auto text-mini"
         >
           <span className="header-flame-burner" aria-hidden="true">
             <span className="header-flame-glyph">

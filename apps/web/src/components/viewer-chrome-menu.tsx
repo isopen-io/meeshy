@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { VIEWER_GLASS, type ViewerProbe } from './viewer-chrome';
@@ -46,6 +48,10 @@ export function ViewerMenu({
     setOpen(next);
     onOpenChangeRef.current?.(next);
   };
+
+  /* LE MENU OUVERT EST LA COUCHE DU DESSUS (#18326) : le retour Android et
+     Précédent le referment seul, la visionneuse dessous reste ouverte. */
+  useBackDismiss(() => change(false), { active: open });
 
   useEffect(() => {
     if (!open) return;

@@ -144,9 +144,10 @@ struct MentionSuggestionOverlay: View {
         VStack(spacing: 0) {
             if controller.activeQuery != nil {
                 MentionSuggestionPanel(controller: controller, accentColor: accentColor, pick: pick)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: controller.activeQuery != nil)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade,
+                         value: controller.activeQuery != nil)
     }
 }

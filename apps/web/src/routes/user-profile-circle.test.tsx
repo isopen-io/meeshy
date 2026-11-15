@@ -65,6 +65,14 @@ describe('la ligne du cercle', () => {
     expect(html).toContain('Semaines d’affilée : 5 sur 12');
   });
 
+  test('la phrase qui dit ce qu’est un cercle se lit au repos, sous la ligne de niveau, sans clic (épure #17584, règle 7)', () => {
+    const html = view({ link: link({ effectiveLevel: 'FRIEND' }) });
+    expect(html).toContain('data-profile-circle-intro');
+    expect(html).toContain('Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.');
+    expect(html.indexOf('data-profile-circle-intro')).toBeGreaterThan(html.indexOf('data-profile-circle-progress'));
+    expect(html.slice(html.indexOf('data-profile-circle-intro') - 200, html.indexOf('data-profile-circle-intro') + 50)).not.toContain('sr-only');
+  });
+
   test('rien n’est fabriqué : sans lien servi, ou sous Connaissance, rien', () => {
     expect(view({ link: null })).toBe('');
     expect(view({ link: link({ effectiveLevel: 'COMMUNITY' }) })).toBe('');
