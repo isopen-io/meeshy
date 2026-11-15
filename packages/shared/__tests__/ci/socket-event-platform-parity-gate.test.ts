@@ -117,13 +117,6 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['android'],
-    raison:
-      "plusieurs appareils d'un compte, un partage de position (#18389) : le web et iOS se recalent sur le partage "
-      + 'servi (#18578) ; Android le portera avec son centre de partage.',
-    events: ['location:share-own-changed'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "

@@ -1,0 +1,240 @@
+package me.meeshy.sdk.relation
+
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.location.LiveLocationFixSource
+import me.meeshy.sdk.location.LocationPermissionGate
+import me.meeshy.sdk.model.LiveLocationFix
+import me.meeshy.sdk.model.relation.SharedLocationFix
+import me.meeshy.sdk.model.relation.SharedLocationOwnRecipient
+import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
+import me.meeshy.sdk.model.relation.SharedLocationPrecision
+import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
+import me.meeshy.sdk.model.relation.SharedLocationShareDuration
+import me.meeshy.sdk.model.relation.SharedLocationStartRequest
+import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
+import org.junit.Test
+
+/**
+ * PLUSIEURS APPAREILS, UN PARTAGE (#18578, moitié Android), iso `SharedLocationSharingSyncTests.swift` : le centre se
+ * recale sur la liste que la passerelle sert, et une liste REÇUE d'un autre appareil ne fait jamais partir la position
+ * d'ici.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class SharedLocationSharingSyncTest {
+
+    private val alice = "aaaaaaaaaaaaaaaaaaaaaaaa"
+    private val bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
+    private val hour = 3_600_000L
+
+    /** Un appareil du compte « me » : son stockage survit à un « relancement » (un second centre sur le même stockage). */
+    private class Device(
+        private val scope: TestScope,
+        val saved: MutableMap<String, String?> = mutableMapOf(),
+        val receivedMarks: MutableMap<String, Boolean> = mutableMapOf(),
+    ) {
+        var servedSnapshot: SharedLocationOwnSnapshot? = null
+        var startVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
+        val connected = MutableStateFlow(false)
+        val ownChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+        val starts = mutableListOf<SharedLocationStartRequest>()
+        val updates = mutableListOf<SharedLocationFix>()
+        var stops = 0
+        var reads = 0
+        var following = 0
+        val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
+
+        val center = SharedLocationSharingCenter(
+            emitter = object : SharedLocationEmitting {
+                override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
+                    starts += request
+                    return startVerdict
+                }
+                override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
+                    updates += fix
+                    return SharedLocationStartVerdict.Started(0L)
+                }
+                override suspend fun stop(): Boolean {
+                    stops++
+                    return true
+                }
+            },
+            fixes = object : LiveLocationFixSource {
+                override suspend fun currentFix() = LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
+                override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
+                    following++
+                    return stream
+                }
+            },
+            permission = LocationPermissionGate { true },
+            store = object : SharedLocationRosterStoring {
+                override fun load(accountId: String): String? = saved[accountId]
+                override fun save(accountId: String, stored: String?) { saved[accountId] = stored }
+                override fun loadReceived(accountId: String): Boolean = receivedMarks[accountId] == true
+                override fun saveReceived(accountId: String, received: Boolean) { receivedMarks[accountId] = received }
+            },
+            accountId = { "me" },
+            connected = connected,
+            clock = { scope.currentTime },
+            dispatcher = StandardTestDispatcher(scope.testScheduler),
+            ownChanged = ownChanged,
+            served = {
+                reads++
+                servedSnapshot
+            },
+        )
+
+        fun relaunched(): Device = Device(scope, saved, receivedMarks)
+    }
+
+    private fun served(vararg pairs: Pair<String, Long>) =
+        SharedLocationOwnSnapshot(pairs.map { (id, until) -> SharedLocationOwnRecipient(id, SharedLocationPrecision.CITY, until) })
+
+    @Test
+    fun `un retrait fait sur un autre appareil s'applique ici a la socket accrochee, sans republier`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        val startsBefore = device.starts.size
+        device.servedSnapshot = served(alice to 8 * hour)
+
+        device.connected.value = true
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.starts).hasSize(startsBefore)
+        assertThat(device.stops).isEqualTo(0)
+    }
+
+    @Test
+    fun `un ajout fait ailleurs, annonce, n'est plus efface par le partage suivant d'ici`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.servedSnapshot = served(alice to hour, bob to 2 * hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(device.starts.last().recipients.map { it.userId }).containsExactly(alice, bob)
+    }
+
+    @Test
+    fun `une relecture qui echoue ne change rien`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        val before = device.center.roster.value
+        device.servedSnapshot = null
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.reads).isEqualTo(1)
+        assertThat(device.center.roster.value).isEqualTo(before)
+    }
+
+    @Test
+    fun `la passerelle ne sert plus rien, le suivi s'arrete ici`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.servedSnapshot = served()
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.stream.emit(LiveLocationFix(48.9, 2.4, accuracy = 8.0))
+        advanceTimeBy(60_000L)
+        runCurrent()
+
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        assertThat(device.saved["me"]).isNull()
+        assertThat(device.updates).isEmpty()
+    }
+
+    @Test
+    fun `une liste recue d'un autre appareil ne fait jamais partir la position d'ici, meme apres relancement`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.following).isEqualTo(0)
+        assertThat(device.receivedMarks["me"]).isTrue()
+
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        assertThat(relaunched.center.roster.value.entry(alice)).isNotNull()
+        assertThat(relaunched.following).isEqualTo(0)
+        assertThat(relaunched.starts + device.starts).isEmpty()
+    }
+
+    @Test
+    fun `l'echeance d'une liste recue se solde sans rien envoyer`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        advanceTimeBy(hour + 2_000L)
+        runCurrent()
+
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        assertThat(device.starts).isEmpty()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.receivedMarks["me"]).isFalse()
+    }
+
+    @Test
+    fun `partager depuis ici fait de cet appareil celui qui publie`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(device.starts.single().recipients.map { it.userId }).containsExactly(alice, bob)
+        assertThat(device.receivedMarks["me"]).isFalse()
+        assertThat(device.following).isEqualTo(1)
+    }
+
+    @Test
+    fun `un partage refuse sur un appareil qui n'a fait que recevoir le laisse muet, meme apres relancement`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.RATE_LIMITED)
+
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+        assertThat(device.following).isEqualTo(0)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        assertThat(relaunched.following).isEqualTo(0)
+    }
+}
