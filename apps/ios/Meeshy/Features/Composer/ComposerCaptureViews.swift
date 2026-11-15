@@ -198,6 +198,7 @@ struct ComposerCaptureChrome: View {
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
+    @Environment(\.composerViewfinderClosesLibrary) private var closesLibrary
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
     private static let accessibleZoomStep: CGFloat = 1.25
@@ -274,6 +275,7 @@ struct ComposerCaptureChrome: View {
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             if !typing { ComposerCaptureGestureHint(session: session) }
+            libraryTouchCatcher
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -331,6 +333,23 @@ struct ComposerCaptureChrome: View {
                 .onTapGesture { saisie.onDismiss() }
                 .transition(.opacity)
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// **La galerie ouverte par-dessus, un toucher sur le viseur la referme** (#18709) : posé
+    /// au-dessus des objets et sous le chrome, le voile ne laisse partir ni photo, ni vidéo, ni zoom.
+    @ViewBuilder
+    private var libraryTouchCatcher: some View {
+        if let refermer = closesLibrary,
+           ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: false, libraryOpen: true) == .closeLibrary {
+            Color.clear
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onEnded { _ in refermer() })
+                .accessibilityElement()
+                .accessibilityLabel(ComposerCameraCopy.closeLibrary)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { refermer() }
         }
     }
 

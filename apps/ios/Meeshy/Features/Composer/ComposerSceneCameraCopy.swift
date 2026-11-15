@@ -233,6 +233,11 @@ enum ComposerCameraCopy {
         String(localized: "composer.camera.validate.mode", defaultValue: "Valider", table: "ComposerCamera", bundle: .main)
     }
 
+    /// Le voile du viseur sous la galerie ouverte (#18709) : le toucher la referme.
+    static var closeLibrary: String {
+        String(localized: "composer.camera.library.close", defaultValue: "Fermer la galerie", table: "ComposerCamera", bundle: .main)
+    }
+
     /// Sous le cadenas, pendant la prise tenue (A9).
     static var handsFree: String {
         String(localized: "composer.camera.handsFree.label", defaultValue: "mains libres", table: "ComposerCamera", bundle: .main)

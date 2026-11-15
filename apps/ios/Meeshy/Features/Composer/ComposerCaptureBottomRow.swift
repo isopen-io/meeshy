@@ -398,9 +398,20 @@ private struct ComposerViewfinderSceneEntryKey: EnvironmentKey {
     static let defaultValue: (@MainActor (ComposerViewfinderEntry) -> Void)? = nil
 }
 
+/// **Comment refermer la galerie ouverte par-dessus le viseur** (#18709) : `nil` tant
+/// qu'aucune n'est ouverte, et hors du composer.
+private struct ComposerViewfinderClosesLibraryKey: EnvironmentKey {
+    static let defaultValue: (@MainActor () -> Void)? = nil
+}
+
 extension EnvironmentValues {
     var composerViewfinderSceneEntry: (@MainActor (ComposerViewfinderEntry) -> Void)? {
         get { self[ComposerViewfinderSceneEntryKey.self] }
         set { self[ComposerViewfinderSceneEntryKey.self] = newValue }
+    }
+
+    var composerViewfinderClosesLibrary: (@MainActor () -> Void)? {
+        get { self[ComposerViewfinderClosesLibraryKey.self] }
+        set { self[ComposerViewfinderClosesLibraryKey.self] = newValue }
     }
 }
