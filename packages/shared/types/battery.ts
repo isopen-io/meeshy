@@ -25,7 +25,9 @@ import { z } from 'zod';
 import {
   BATTERY_ANNOUNCEMENT_KINDS,
   BATTERY_DEVICE_LABEL_MAX,
+  BATTERY_RECEIVE_MODES,
   type BatteryErrorCode,
+  type BatteryReceiveMode,
 } from './battery-constants.js';
 
 export * from './battery-constants.js';
@@ -110,3 +112,25 @@ export type BatteryReportAck =
 export type BatteryPullAck =
   | { readonly success: true; readonly data: { readonly requestedAt: string } }
   | { readonly success: false; readonly error: string; readonly code: BatteryErrorCode };
+
+/** Réglage GLOBAL de l'émetteur : partager sa batterie (vrai par défaut — les Sangs la reçoivent sans confirmation). */
+export const batteryEmitterSettingsUpdateSchema = z.object({ sharingEnabled: z.boolean() }).strict();
+export type BatteryEmitterSettingsUpdate = z.infer<typeof batteryEmitterSettingsUpdateSchema>;
+export type BatteryEmitterSettings = { readonly sharingEnabled: boolean };
+
+/**
+ * Réglages PAR PERSONNE : `shared` est ce que JE partage à l'autre (accord donné une fois
+ * à un Proche, retrait possible même à un Sang) ; `receive` est ce que je veux recevoir
+ * de SA batterie.
+ */
+export const batteryPersonSettingsUpdateSchema = z
+  .object({ shared: z.boolean().optional(), receive: z.enum(BATTERY_RECEIVE_MODES).optional() })
+  .strict()
+  .refine((value) => value.shared !== undefined || value.receive !== undefined);
+export type BatteryPersonSettingsUpdate = z.infer<typeof batteryPersonSettingsUpdateSchema>;
+export type BatteryPersonSettings = {
+  readonly userId: string;
+  /** Ce que la loi dit MAINTENANT : l'autre reçoit-il ma batterie ? */
+  readonly shared: boolean;
+  readonly receive: BatteryReceiveMode;
+};

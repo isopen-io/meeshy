@@ -828,6 +828,10 @@ export type {
   BatteryChangedEventData,
   BatteryClearedEventData,
   BatterySnapshot,
+  BatteryEmitterSettings,
+  BatteryEmitterSettingsUpdate,
+  BatteryPersonSettings,
+  BatteryPersonSettingsUpdate,
 } from './battery.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';

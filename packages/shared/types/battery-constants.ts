@@ -96,3 +96,21 @@ export const BATTERY_ERROR_CODES = {
   PULL_TOO_SOON: 'BATTERY_PULL_TOO_SOON',
 } as const;
 export type BatteryErrorCode = (typeof BATTERY_ERROR_CODES)[keyof typeof BATTERY_ERROR_CODES];
+
+/**
+ * Ce qu'un LECTEUR veut recevoir de la batterie d'une personne (réglage par personne) :
+ *
+ * - `all` (défaut) : le canal que le contexte décide (`batteryReaderChannel`) ;
+ * - `critical` : seul le critique interrompt par push ; le reste du push devient SyncPill ;
+ * - `pill` : jamais de push, la SyncPill seulement (app ouverte) ;
+ * - `none` : rien — ni annonce, ni état.
+ */
+export const BATTERY_RECEIVE_MODES = ['all', 'critical', 'pill', 'none'] as const;
+export type BatteryReceiveMode = (typeof BATTERY_RECEIVE_MODES)[number];
+export const BATTERY_DEFAULT_RECEIVE_MODE: BatteryReceiveMode = 'all';
+
+/** Le type de notification des annonces poussées hors conversation. */
+export const BATTERY_NOTIFICATION_TYPE = 'device_battery' as const;
+
+/** Le `data.type` du push SILENCIEUX qui demande un relevé au téléphone de l'émetteur. */
+export const BATTERY_PULL_PUSH_TYPE = 'battery_pull' as const;

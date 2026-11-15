@@ -10,6 +10,10 @@ import {
   batteryReaderStateSchema,
   batteryReportSchema,
   batterySnapshotSchema,
+  batteryEmitterSettingsUpdateSchema,
+  batteryPersonSettingsUpdateSchema,
+  BATTERY_RECEIVE_MODES,
+  BATTERY_DEFAULT_RECEIVE_MODE,
 } from '../types/battery';
 import { BATTERY_CLIENT_EVENTS, BATTERY_SERVER_EVENTS } from '../types/socketio-events/battery-event-names';
 
@@ -127,5 +131,26 @@ describe('les noms et la configuration', () => {
 
   it('nomme ses refus', () => {
     expect(Object.values(BATTERY_ERROR_CODES).every((code) => code.startsWith('BATTERY_'))).toBe(true);
+  });
+});
+
+describe('les réglages de la batterie', () => {
+  it('le réglage global ne porte que sharingEnabled, booléen strict', () => {
+    expect(batteryEmitterSettingsUpdateSchema.safeParse({ sharingEnabled: false }).success).toBe(true);
+    expect(batteryEmitterSettingsUpdateSchema.safeParse({ sharingEnabled: 'false' }).success).toBe(false);
+    expect(batteryEmitterSettingsUpdateSchema.safeParse({ sharingEnabled: true, extra: 1 }).success).toBe(false);
+  });
+
+  it('le réglage par personne exige au moins un champ et refuse un mode inconnu', () => {
+    expect(batteryPersonSettingsUpdateSchema.safeParse({ shared: true }).success).toBe(true);
+    expect(batteryPersonSettingsUpdateSchema.safeParse({ receive: 'critical' }).success).toBe(true);
+    expect(batteryPersonSettingsUpdateSchema.safeParse({}).success).toBe(false);
+    expect(batteryPersonSettingsUpdateSchema.safeParse({ receive: 'loud' }).success).toBe(false);
+    expect(batteryPersonSettingsUpdateSchema.safeParse({ shared: null }).success).toBe(false);
+  });
+
+  it('les modes de réception sont tous, critique, SyncPill, rien — tous par défaut', () => {
+    expect(BATTERY_RECEIVE_MODES).toEqual(['all', 'critical', 'pill', 'none']);
+    expect(BATTERY_DEFAULT_RECEIVE_MODE).toBe('all');
   });
 });

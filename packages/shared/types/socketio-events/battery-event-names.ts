@@ -4,11 +4,8 @@
  * Audience : la room `user:<lecteur>`, lecteur par lecteur, chacun avec SA projection et
  * SON canal (`batteryReaderChannel`) — jamais une room partagée.
  *
- * PAS ENCORE répandus dans `SERVER_EVENTS` / `CLIENT_EVENTS` : les gardes
- * `socket-event-emitter-gate`, `socket-event-handler-gate` et `socket-event-orphan-gate`
- * exigent émetteur, écouteur et lecteur dès qu'un nom entre dans les cartes. Le lot
- * passerelle les y répand dans le commit qui pose `socket.on` et l'émission
- * (`docs/superpowers/specs/2026-11-15-batterie-proches-design.md` § 1).
+ * Répandus dans `SERVER_EVENTS` / `CLIENT_EVENTS` par le lot passerelle, qui pose
+ * `socket.on` (`BatteryHandler.ts`) et l'émission (`services/battery/batteryRelay.ts`).
  */
 
 export const BATTERY_CLIENT_EVENTS = {
