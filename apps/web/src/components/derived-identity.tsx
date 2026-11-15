@@ -107,7 +107,7 @@ export function DerivedIdentity({
               key={candidat}
               type="button"
               onClick={() => onUsernameChange(candidat)}
-              className="rounded-chip px-3 text-caption font-semibold"
+              className="btn-press rounded-chip px-3 text-caption font-semibold"
               style={{ minHeight: 44, color: tint, backgroundColor: `color-mix(in srgb, ${tint} 12%, transparent)` }}
             >
               @{candidat}
