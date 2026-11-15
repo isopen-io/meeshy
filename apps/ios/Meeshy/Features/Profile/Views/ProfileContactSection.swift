@@ -73,7 +73,7 @@ struct ProfileContactSection: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityHint(Self.openSecurityHint)
         .accessibilityIdentifier(identifier)

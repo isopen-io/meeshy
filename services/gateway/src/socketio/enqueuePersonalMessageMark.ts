@@ -66,7 +66,7 @@
  * bornée à `DELIVERY_QUEUE_MAX_PER_USER` (500) et son `LTRIM` garde les plus
  * RÉCENTES : cent entrées pour un seul geste évinceraient les messages que le
  * lecteur n'a pas encore vus. Le groupement par CONVERSATION est aussi ce que
- * le gate d'autorisation du drain exige — `_dropEndedMemberships` agrège les
+ * le gate d'autorisation du drain exige — `authorizeDrainedEntries` agrège les
  * `conversationId` du lot — et ce que les modules producteurs ont déjà choisi
  * pour la diffusion (« UNE diffusion pour tout le lot, jamais une par
  * message »).

@@ -11,6 +11,8 @@ from typing import Dict, Optional
 from contextlib import asynccontextmanager
 import uuid
 
+from utils.audio_path_guard import guard_optional_audio_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -192,6 +194,8 @@ class RequestHandler:
     ) -> tuple[Optional[str], Optional[str]]:
         """
         Extract audio path from request, converting base64 if needed.
+        A requested path is kept only under an allowed root
+        (`utils.audio_path_guard`, #18628); otherwise AudioPathRejected.
 
         Args:
             request_data: Request payload
@@ -203,7 +207,7 @@ class RequestHandler:
             Tuple of (audio_path, temp_path_to_cleanup)
         """
         audio_base64 = request_data.get(audio_key)
-        audio_path = request_data.get(path_key)
+        audio_path = guard_optional_audio_path(request_data.get(path_key))
 
         if audio_base64 and not audio_path:
             # Convert base64 to file synchronously

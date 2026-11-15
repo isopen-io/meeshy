@@ -68,6 +68,20 @@ enum SettingsFocus: String, Equatable, CaseIterable, Identifiable {
     }
 }
 
+/// **Les temps de la mise au point d'un réglage désigné, nommés** (#18589).
+/// SwiftUI ne signale pas la fin d'une poussée de pile : une feuille demandée
+/// pendant la transition est avalée, un défilement vers une ancre pas encore
+/// montée ne mène nulle part. Ces temps-là ne s'écrivent donc qu'ici.
+extension MeeshyMotion {
+    /// La poussée d'un écran achevée : son ancre est montée, il peut défiler.
+    static let pushSettle: Duration = .milliseconds(350)
+    /// Une feuille que l'écran poussé ouvre de lui-même.
+    static let sheetAfterPush: Duration = .milliseconds(500)
+    /// Une feuille ouverte APRÈS le défilement jusqu'à sa rangée, pour qu'on
+    /// voie d'où elle vient (Sécurité par-dessus les Réglages).
+    static let sheetAfterFocusScroll: Duration = .milliseconds(900)
+}
+
 /// La demande en attente, posée par l'invite et CONSOMMÉE une fois par l'écran
 /// qui montre le réglage — un retour ultérieur aux Réglages ne la rejoue pas.
 @MainActor
