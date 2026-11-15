@@ -48,6 +48,7 @@ import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSo
 import { emitMessageNewBestEffort } from './messageNewEmission';
 import { emitMessageNewByLanguage } from './messageNewByLanguage';
 import { readerSignedPlanBestEffort } from './readerSignedDelivery';
+import { flooredAudience, targetWithout } from './flooredAudience';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
@@ -2467,9 +2468,22 @@ export class MeeshySocketIOManager {
         processingTimeMs: data.processingTimeMs
       };
 
-      // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
-      logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      // #18623 — la transcription est le TEXTE du message : elle ne part qu'à
+      // qui a le droit de LIRE ce message. `_broadcastAttachmentUpdated`, sept
+      // lignes plus bas, applique déjà cette loi (#17025) ; ce canal-ci partait
+      // nu à toute la room, donc une milliseconde AVANT elle.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('transcription:ready readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        target.emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+        logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      } else {
+        // La pièce enrichie reste servie par la relecture du fil, qui applique
+        // le plancher côté serveur : on perd une remise, jamais la vérité.
+        logger.warn('transcription:ready withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : clients atomically replace the
       // attachment in their store and refresh derived metadata
@@ -2623,8 +2637,19 @@ export class MeeshySocketIOManager {
       // tuples et n'importe quelle charge de la famille passe sous n'importe
       // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
       // paramétré par `ServerToClientEvents` — et ne l'était pas.
-      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
-      logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      // #18623 — la jumelle de `transcription:ready` : la charge porte le TEXTE
+      // traduit, ses `segments`, ET l'URL de la piste TTS. Même loi, même
+      // arbitrage.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('audio-translation readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        emitServerEvent(target, eventConstant, translationData);
+        logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      } else {
+        logger.warn('audio-translation withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : same rationale as the
       // transcription-ready branch. Clients receive the FULL re-serialized

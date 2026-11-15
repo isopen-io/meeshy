@@ -97,7 +97,6 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
         <AdminEmptyState
           glyph="linkSimple"
           title={translateAdmin(language, 'admin.shareLink.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.shareLink.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}

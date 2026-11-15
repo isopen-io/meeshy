@@ -43,9 +43,17 @@ export interface AttachmentUpdatedEventData {
   readonly conversationId: string;
   readonly messageId: string;
   /**
-   * L'identifiant de la pièce, au premier niveau (#11264, audit S9) : le
-   * décodeur Android natif (`AttachmentUpdatedEvent`) l'exige et rejetait
-   * l'événement entier sans lui. Ajout pur : il redit `attachment.id`.
+   * L'identifiant de la pièce, au premier niveau (#11264, audit S9). Ajout pur :
+   * il redit `attachment.id`, et les trois miroirs le déclarent OPTIONNEL — un
+   * enrichissement qui porte sur le message entier n'en nomme aucune pièce.
+   *
+   * **La raison écrite ici jusqu'au 2026-11-14 nommait un consommateur qui n'existe
+   * plus** : « le décodeur Android natif (`AttachmentUpdatedEvent`) l'exige et
+   * rejetait l'événement entier sans lui ». Ce décodeur était le miroir PLAT, dont
+   * aucun collecteur ne lisait le flux ; il est retiré (#18115), et l'exigence
+   * qu'il portait avait déjà été levée par #18070. Le miroir Kotlin vivant est
+   * `MessageAttachmentUpdatedEvent`, qui retombe sur `attachment.id`
+   * (`servedAttachmentId`) — comme `AttachmentUpdatedEvent` côté Swift.
    */
   readonly attachmentId?: string;
   readonly attachment: unknown;

@@ -10,6 +10,7 @@
  *
  * RELÈVEMENT MOTIVÉ (#17641) : un budget ne monte que par une entrée `releves["<vue>"] = { de, a, motif, issue }` de
  * `verbosity-budgets.json`, où `de` est le budget de la base et `a` le budget inscrit, sans dépasser `verbosity-socle.json` (l'avant-épure).
+ * Le plafond lui-même ne se relève que par la même entrée, inscrite dans `verbosity-socle.json` : un repère que l'avant-épure ne portait pas.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -60,6 +61,9 @@ const previousSocle = previous === null ? null : readBase(SOCLE_PATH);
 const problems = [...verbosityProblems({ listed: views.map((view) => view.name), measured, budgets, previous, socle }), ...socleProblems({ socle, previousSocle })];
 for (const [name, releve] of Object.entries(budgets.releves ?? {})) {
   console.log(`  relevé  ${name} : ${releve.de.total}/${releve.de.firstScreen} → ${releve.a.total}/${releve.a.firstScreen} (#${releve.issue}) — ${releve.motif}`);
+}
+for (const [name, releve] of Object.entries(socle.releves ?? {})) {
+  console.log(`  plafond relevé  ${name} : ${releve.de.total}/${releve.de.firstScreen} → ${releve.a.total}/${releve.a.firstScreen} (#${releve.issue}) — ${releve.motif}`);
 }
 for (const [name, view] of Object.entries(measured.views)) {
   const budget = budgets.views[name];

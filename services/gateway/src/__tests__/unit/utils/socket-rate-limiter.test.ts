@@ -289,7 +289,7 @@ describe('checkSocketRateLimit', () => {
       expect.objectContaining({
         code: 'RATE_LIMIT_EXCEEDED',
         message: expect.stringContaining('seconds'),
-        retryAfter: expect.any(Number),
+        details: { retryAfter: expect.any(Number) },
       })
     );
   });
@@ -309,8 +309,8 @@ describe('checkSocketRateLimit', () => {
     await limiter.checkLimit('u4', tightConfig);
     await checkSocketRateLimit(socket as any, 'u4', tightConfig, limiter);
     const payload = socket.emit.mock.calls[0][1] as any;
-    expect(Number.isInteger(payload.retryAfter)).toBe(true);
-    expect(payload.retryAfter).toBeGreaterThan(0);
+    expect(Number.isInteger(payload.details.retryAfter)).toBe(true);
+    expect(payload.details.retryAfter).toBeGreaterThan(0);
   });
 });
 

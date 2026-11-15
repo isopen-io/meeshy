@@ -158,12 +158,11 @@ final class ComposerLookStripFilterTests: XCTestCase {
         XCTAssertNil(ComposerLookStripFilterRule.followedIndex(in: [], look: courant, focus: nil))
     }
 
-    func test_focusOpening_pointsAtThatFamilysHalfOfTheLook() {
-        let courant = ComposerPhotoLook(filter: .film, frame: .montage(.classic(.noir)), effect: .angel)
-        XCTAssertEqual(ComposerLookStripFilterRule.focus(opening: .filters, look: courant), .filter(.film))
-        XCTAssertEqual(ComposerLookStripFilterRule.focus(opening: .effects, look: courant), .effect(.angel))
-        XCTAssertEqual(ComposerLookStripFilterRule.focus(opening: .frames, look: courant),
-                       .frame(.montage(.classic(.noir))))
+    func test_opening_withoutFocus_followsTheFirstChosenCell() {
+        let courant = ComposerPhotoLook(filter: .film, effect: .angel)
+        let tout = ComposerLookStripFilterRule.items(ComposerLookStripFilter())
+        let suivie = ComposerLookStripFilterRule.followedIndex(in: tout, look: courant, focus: nil)
+        XCTAssertEqual(suivie.map { tout[$0] }, .filter(.film), "« Effets » ouvre la bande sur le look en cours")
     }
 
     // MARK: - L'ouverture
@@ -208,7 +207,7 @@ final class ComposerLookStripFilterTests: XCTestCase {
                        "la bande de la prise, celle de la retouche et les puces lisent le même tri")
         XCTAssertEqual(ComposerEditScene.familyRow,
                        max(ComposerEditScene.bandHeight + 2 * ComposerTriggerOutline.outset,
-                           3 * MeeshyControlSize.tapTarget + 2 * MeeshySpacing.sm) + ComposerLookStripRule.chipsHeight)
+                           MeeshyControlSize.tapTarget) + ComposerLookStripRule.chipsHeight)
     }
 
     func test_chips_reuseTheCallFrameMoodChip() throws {

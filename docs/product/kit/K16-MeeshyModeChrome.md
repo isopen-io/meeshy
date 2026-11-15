@@ -155,3 +155,20 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 16. Occupé : la roue du système à la place du glyphe, largeur gardée. (Anneau K09 ; libellé changé.)
 17. La barre basse des modes d'appel reste à I1. (La migrer dans ce lot.)
 18. Le lot ne rebranche aucun jumeau. (Rebrancher le viseur iOS dans le lot.)
+
+## 10. Android (lot K16, `:sdk-ui` `component/kit`, 2026-11-15)
+Livré : `MeeshyModeChrome`, `MeeshyModeHeader`, `MeeshyModePlate`, `MeeshyModeCapsule`, `MeeshyModeAction`, les trois énumérés (`MeeshyModeCapsuleKind`, `MeeshyModeCapsuleDisplay`, `MeeshyModeChromePresence`) et les lois pures (`MeeshyModeChromeRule`, `MeeshyModeHeaderFit`, `MeeshyModePlateMetrics`, `MeeshyModeChromeRecipe`, `MeeshyModeCapsuleStyle`), lues contre les mêmes vecteurs que iOS. Catalogue : `KitCatalogK16.kt`, les onze états d'iOS.
+
+Transpositions imposées par la plateforme :
+- Emplacements : un emplacement vide est `null` (`center`, `accessory`, `plate`), pas une vue vide ; `plateLabel` est exigé dès que `plate` est donné.
+- Cible : la capsule visible fait 44 dp, sa cible 48 dp (`minimumInteractiveComponentSize`) ; le retrait du haut retranche les 2 dp que la cible déborde, pour que la capsule se pose à 14 dp comme sur la planche.
+- Retour matériel : `BackHandler` vaut Quitter (`exitOnEscape`), le geste d'échappement de TalkBack est l'action `dismiss` du groupe de l'en-tête (posée seulement avec `exitOnEscape`, comme `dismissOnEscape` d'iOS), Échap et Ctrl ou Méta + Entrée passent par `onPreviewKeyEvent` ; tous par le chemin unique `MeeshyModeActionValues.perform`. L'annonce d'entrée est le `paneTitle` de l'en-tête ; la plaque est un groupe nommé par `contentDescription`.
+- Ajustement : les quatre pas se composent dans l'ordre par un `SubcomposeLayout` jusqu'à ce que l'un tienne (largeurs naturelles par mesures intrinsèques, un seul `measure` par enfant) ; les positions sont miroitées par `placeRelative`. L'en-tête ne se laisse donc pas interroger en mesures intrinsèques par un ancêtre.
+- Plaque : le plafond de 42 % se calcule sur `screenHeightDp` (ou `windowHeight`, pour un hôte hors fenêtre) ; la hauteur n'est jamais mesurée, c'est `heightIn(max)` sur une colonne qui défile. Le bas suit `safeBottom` (la barre de navigation par défaut ; un hôte dont le cadre est déjà inséré passe `0.dp`) et ne suit jamais le clavier.
+- Le toucher sur la plaque est retenu par un `pointerInput` vide, le reste du cadre ne reçoit rien : les touchers passent au contenu de l'hôte.
+- Appui figé du catalogue : `LocalMeeshyModeFixedPress` (pendant de l'environnement `meeshyModeFixedPress`).
+- Occupé : la roue du système est le `CircularProgressIndicator` de Material 3 (trait de 2 dp, encre de la capsule), pendant du `ProgressView` d'iOS ; aucune roue redessinée.
+- Valeur « En cours » : la chaîne `kit.progress_ring.busy` du catalogue de MeeshyUI, adoptée côté Android (`kit_progress_ring_busy`, fragment `i18n/manifest/sdk-ui.d/kit-k16-cadre-de-mode.json`).
+- Mouvement : `AnimatedVisibility` (translation 12 dp et opacité, 250 ms / 200 ms ; fondu seul de 150 ms sous « réduire les animations »), la pièce rangée sort de l'arbre ; le fondu du contenu de plaque est un `Crossfade` de 150 ms posé seulement si `contentKey` est donné.
+
+Rien n'est rebranché : `RetouchTopRow`, `CaptureTopItem`, `ScenePanelSurface`, `PanelDone` et `SheetHeaderAction` restent en place jusqu'aux lots d'intégration.
