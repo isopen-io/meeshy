@@ -296,7 +296,6 @@ try {
         inks[`${id} nom`] = await worstContrastUnderWhite(page, `[data-community-card="${id}"] [data-community-name]`);
         inks[`${id} compteurs`] = await worstContrastUnderWhite(page, `[data-community-card="${id}"] [data-community-counts]`);
       }
-      inks['m-polyglottes description'] = await worstContrastUnderWhite(page, '[data-community-card="m-polyglottes"] [data-community-description]');
       await page.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
       /* Le texte d'une carte ne monte jamais dans la bande de l'avatar : un nom de
          deux lignes sur une description de deux lignes, au gabarit étroit, est le

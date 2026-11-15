@@ -10,10 +10,12 @@ import { localMessage, threadPages } from '@/test-support/thread-cache';
 
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
+import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { messagesQueryKey } from './messages';
-import { NOTIFICATION_COUNTS_QUERY_KEY } from './notifications';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import { UNKNOWN_ROW_COALESCE_MS } from './realtime-thread-catch-up';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
+import { STARRED_MESSAGES_QUERY_ROOT } from './starred-messages-cache';
 import { createTypingStore } from './typing-store';
 import type { Conversation } from './types';
 
@@ -282,17 +284,81 @@ describe('#10573 — la PREMIÈRE authentification rattrape ce que la liste et l
     stop();
   });
 
-  test('la case d’une conversation, une fenêtre ancrée et la cloche ne sont pas touchées', () => {
+  /**
+   * La cloche figurait ICI jusqu'à #18573, dans la même phrase que les deux
+   * assertions ci-dessous — qui sont JUSTES : ni la case d'une conversation, ni
+   * une fenêtre ancrée ne sont nourries par `message:new`. La cloche, elle, est
+   * une famille PERSONNELLE que la fenêtre de première connexion prend en
+   * entier, exactement comme une coupure : l'assertion gelait une lacune sous
+   * les apparences d'une décision. Ce qu'elle doit faire est témoigné par le
+   * bloc #18573 plus bas.
+   */
+  test('la case d’une conversation et une fenêtre ancrée ne sont pas touchées', () => {
     const { socket, queryClient } = connect();
     const anchored = [...messagesQueryKey('c-a'), 'around', 'm-0'] as const;
     queryClient.setQueryData(conversationQueryKey('c-a'), row('c-a'));
     queryClient.setQueryData(anchored, threadPages([]));
-    queryClient.setQueryData(NOTIFICATION_COUNTS_QUERY_KEY, { total: 0, unread: 0, byType: {} });
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
 
     expect(isInvalidated(queryClient, conversationQueryKey('c-a'))).toBe(false);
     expect(isInvalidated(queryClient, anchored)).toBe(false);
-    expect(isInvalidated(queryClient, NOTIFICATION_COUNTS_QUERY_KEY)).toBe(false);
   });
+});
+
+/**
+ * #18573 — LA FENÊTRE DE LA PREMIÈRE CONNEXION PREND LES MÊMES FAMILLES QU'UNE
+ * COUPURE. La branche de reconnexion relit cinq familles, chacune avec sa
+ * raison écrite (#6288, #6321, #6974, #7378) ; la première authentification
+ * n'en relisait qu'une. La fenêtre est pourtant la même — #10573 la nomme :
+ * « le socket se branche APRÈS la première peinture ; ce qui est parti entre la
+ * lecture REST et l'entrée dans les rooms était perdu ».
+ *
+ * Et rien d'autre ne les rattrape à cet instant : l'unique lecteur des
+ * compteurs ne relit que sur FOCUS de fenêtre, et un démarrage à froid n'en
+ * produit aucun — la fenêtre est déjà au premier plan.
+ *
+ * Le prédicat, lui, ne change pas : seules les requêtes DÉJÀ SERVIES et au
+ * repos repartent. Une requête en vol couvre déjà la fenêtre, et la doubler
+ * coûterait une requête sur le chemin de la première peinture.
+ */
+describe('#18573 — la première authentification rattrape les familles PERSONNELLES, pas la seule liste', () => {
+  const PERSONAL_FAMILIES = [
+    ['la cloche — les listes', [...NOTIFICATION_LISTS_KEY, 'all'] as const],
+    ['la cloche — les comptes', NOTIFICATION_COUNTS_QUERY_KEY],
+    ['les demandes d’amitié', FRIENDS_QUERY_PREFIX],
+    ['les messages favoris', STARRED_MESSAGES_QUERY_ROOT],
+  ] as const;
+
+  for (const [nom, queryKey] of PERSONAL_FAMILIES) {
+    test(`${nom} : déjà servie et au repos ⇒ relue`, () => {
+      const { socket, queryClient } = connect();
+      queryClient.setQueryData(queryKey, { quoi: 'servi avant que le socket existe' });
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+    });
+
+    test(`${nom} : encore en vol au démarrage ⇒ pas doublée`, () => {
+      const { socket, queryClient } = connect();
+      const server: Server = { calls: 0, respond: never };
+      const stop = observe(queryClient, queryKey, server, Number.POSITIVE_INFINITY);
+      expect(server.calls).toBe(1);
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(server.calls).toBe(1);
+      expect(isInvalidated(queryClient, queryKey)).toBe(false);
+      stop();
+    });
+
+    test(`${nom} : jamais servie ⇒ rien n’est demandé`, () => {
+      const { socket, queryClient } = connect();
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(queryClient.getQueryState(queryKey)).toBeUndefined();
+    });
+  }
 });

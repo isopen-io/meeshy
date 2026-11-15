@@ -401,10 +401,6 @@ class TranslationHandler:
             if not success:
                 await self.publish_pool_full([task])
 
-        except json.JSONDecodeError as e:
-            logger.error(f"[TRANSLATOR] Erreur de décodage JSON: {type(e).__name__}")
-            if not outcome_owned:
-                await self._report_unprocessed(task, claimed_task_id)
         except Exception as e:
             logger.error(f"[TRANSLATOR] Erreur lors du traitement de la requête: {type(e).__name__}")
             if not outcome_owned:

@@ -467,6 +467,20 @@ describe('la feuille d’emojis — les teintes de peau', () => {
     expect(localStorage.getItem(EMOJI_SKIN_TONE_KEY)).toBeNull();
   });
 
+  test('teintes ouvertes, le retour Android ou Précédent referme la rangée seule : la feuille reste ouverte (#18326)', async () => {
+    const closed: string[] = [];
+    const host = await ready(await open(() => {}, () => closed.push('fermée')));
+    await shiftF10(cell(host, '👍'));
+    expect(menu(host)).not.toBeNull();
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(menu(host)).toBeNull();
+    expect(closed).toEqual([]);
+    expect(cell(host, '👍').isConnected).toBe(true);
+  });
+
   test('de droite à gauche, la flèche gauche avance dans les teintes', async () => {
     document.documentElement.lang = 'ar';
     const host = await ready(await open());

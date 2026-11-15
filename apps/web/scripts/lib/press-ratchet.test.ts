@@ -33,9 +33,12 @@ const sourcesOfTree = () =>
  * commit : 1 105 balises, dont 1 019 sans réponse d'appui ; 21 durées
  * littérales dans 20 fichiers. Il ne descend que par un lot d'écran, et se
  * grave plus bas dans le même commit. 20 durées dans 19 fichiers depuis que
- * le disque du Bring laisse la feuille porter son fondu.
+ * le disque du Bring laisse la feuille porter son fondu. 1011 balises muettes
+ * depuis l'étape du code SMS, la rangée des teintes et la carte de la série
+ * (#18326), puis 938 depuis que toute la zone du kit répond à l'appui
+ * (`press-kit-navigation.test.ts`).
  */
-const PLAFOND = { mute: 1017, durations: 20 } as const;
+const PLAFOND = { mute: 938, durations: 20 } as const;
 
 const source = (path: string, text: string) => ({ path, text });
 

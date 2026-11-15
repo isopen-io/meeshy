@@ -109,7 +109,7 @@ export function AppUpdateBanner({
             {translate(language, 'appUpdate.action')}
           </a>
         ) : (
-          <button type="button" onClick={onApply} disabled={applying} className={actionClass} style={actionStyle}>
+          <button type="button" onClick={onApply} disabled={applying} className={`btn-press ${actionClass}`} style={actionStyle}>
             {translate(language, applying ? 'appUpdate.applying' : 'appUpdate.action')}
           </button>
         )}
@@ -118,7 +118,7 @@ export function AppUpdateBanner({
           type="button"
           onClick={() => appUpdateStore.getState().dismiss()}
           aria-label={translate(language, 'appUpdate.dismiss')}
-          className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="btn-press grid min-h-11 min-w-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <Glyph name="x" size={16} />

@@ -22,14 +22,24 @@ enum SettingsFocus: String, Equatable, CaseIterable {
     /// La feuille que les Réglages ouvrent d'eux-mêmes pour ce réglage.
     enum Sheet: Equatable { case voiceProfileManage, voiceProfileWizard }
 
-    /// L'ancre de la section de l'écran Réglages où vit le réglage.
-    var settingsAnchor: String {
+    /// La rangée des Réglages qui mène au réglage (#18589).
+    var destination: SettingsDestination {
         switch self {
-        case .voiceProfile, .voiceProfileCreation: return "settings.section.voice"
-        case .transcription: return "settings.section.transcription"
-        case .masterPin: return "settings.section.account"
+        case .voiceProfile, .voiceProfileCreation: return .voiceProfile
+        case .transcription: return .transcriptionMine
+        case .masterPin: return .security
         }
     }
+
+    /// L'ancre du bloc où vit la rangée : la loi des Réglages la porte, une
+    /// invite n'en recopie aucune.
+    var settingsAnchor: String? {
+        SettingsLayout.block(containing: destination)?.id.anchor
+    }
+
+    /// Le réglage vit sous le pli « Annexes » : l'écran le déplie avant de
+    /// défiler, sans quoi l'ancre visée ne serait pas montée.
+    var unfoldsAnnex: Bool { SettingsLayout.unfoldsAnnex(toReach: destination) }
 
     /// Le réglage vit dans l'écran Sécurité, ouvert par-dessus les Réglages.
     var opensSecurity: Bool { self == .masterPin }
@@ -75,7 +85,11 @@ final class SettingsFocusRequest: ObservableObject {
 struct SettingsFocusHighlight: ViewModifier {
     let isActive: Bool
     @State private var lit = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     func body(content: Content) -> some View {
         content
@@ -90,9 +104,10 @@ struct SettingsFocusHighlight: ViewModifier {
     }
 
     private func light() {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35).repeatCount(3, autoreverses: true)) { lit = true }
+        let reduce = reduceMotion
+        meeshyWithAnimation(.easeInOut(duration: 0.35).repeatCount(3, autoreverses: true), reduceMotion: reduce) { lit = true }
         Task { await DelayedUI.perform(after: .milliseconds(2200)) {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { lit = false }
+            meeshyWithAnimation(.easeOut(duration: 0.4), reduceMotion: reduce) { lit = false }
         } }
     }
 }
