@@ -8,6 +8,8 @@ import { setInterfaceLanguage } from '@/lib/interface-language';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+
 import { AppUpdateBanner } from './app-update-banner';
 
 beforeAll(async () => {
@@ -23,6 +25,10 @@ afterAll(async () => {
 });
 
 const mounter = createActMounter();
+const waitOut = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+  });
 
 /* `act()` exige que l'environnement se DÉCLARE (motif `media-grid.test.tsx`) :
    sans ce drapeau, React avertit à chaque montage et n'applique pas ses
@@ -151,15 +157,31 @@ describe('la bannière de mise à jour — ce que ses contrôles font', () => {
     });
 
     await mounter.click(button(host, translate('fr', 'appUpdate.dismiss')));
+    await waitOut();
 
     expect(host.textContent).toBe('');
     expect(appels).toBe(0);
+  });
+
+  test('« Attendre » la fait SORTIR en mouvement : elle reste peinte, inerte et en sortie, le temps du fondu (#18327)', async () => {
+    appUpdateStore.getState().announce(registration());
+    const host = await mount();
+    expect(host.querySelector('[data-app-update]')?.closest('[data-layer-motion]')).not.toBeNull();
+
+    await mounter.click(button(host, translate('fr', 'appUpdate.dismiss')));
+
+    const leaving = host.querySelector('[data-layer-motion]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await waitOut();
+    expect(host.querySelector('[data-app-update]')).toBeNull();
   });
 
   test('une annonce suivante rouvre la bannière refermée', async () => {
     appUpdateStore.getState().announce(registration());
     const host = await mount();
     await mounter.click(button(host, translate('fr', 'appUpdate.dismiss')));
+    await waitOut();
     expect(host.textContent).toBe('');
 
     await act(async () => {
@@ -196,6 +218,7 @@ describe('la bannière de mise à jour — dans la coque, la version vient du ma
     await act(async () => {
       button(host, translate('fr', 'appUpdate.dismiss'))?.click();
     });
+    await waitOut();
 
     expect(host.textContent).toBe('');
   });

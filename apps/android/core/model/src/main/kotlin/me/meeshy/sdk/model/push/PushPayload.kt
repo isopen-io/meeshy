@@ -53,6 +53,8 @@ public data class PushPayload(
     val imageUrl: String? = null,
     /** Le mode servi de la conversation (`e2ee` / `server` / `hybrid`, #14669) ; absent pour le clair ou d'une passerelle antérieure. */
     val conversationEncryptionMode: String? = null,
+    /** La communauté que la notification nomme (#18052 : « ajouté à la communauté ») ; `''` sur le fil = absente. */
+    val communityId: String? = null,
 ) {
     /**
      * #13794 — la conversation que ce push apprend chiffrée de bout en bout, au même titre que la mémoire locale : le mode
@@ -126,6 +128,7 @@ public data class PushPayload(
                 attachmentFileSize = long("attachmentFileSize"),
                 imageUrl = text("imageURL"),
                 conversationEncryptionMode = text("conversationEncryptionMode"),
+                communityId = text("communityId"),
             )
         }
     }

@@ -92,7 +92,7 @@ export default function ContactCard({
             <button
               type="button"
               onClick={() => void vcard.refetch()}
-              className="rounded-chip px-4 text-body font-semibold"
+              className="btn-press rounded-chip px-4 text-body font-semibold"
               style={{ minHeight: 44, color: 'inherit', border: '1px solid currentColor' }}
             >
               {translate(language, 'contactCard.retry')}
@@ -105,7 +105,7 @@ export default function ContactCard({
               setDownload('busy');
               void saveFile(attachment).then((outcome) => setDownload(outcome === 'failed' ? 'failed' : 'idle'));
             }}
-            className="flex items-center gap-2 rounded-chip px-4 text-body"
+            className="btn-press flex items-center gap-2 rounded-chip px-4 text-body"
             style={{ minHeight: 44, color: 'inherit', textDecoration: 'underline' }}
             data-contact-download=""
           >
@@ -135,7 +135,7 @@ export default function ContactCard({
       <button
         type="button"
         onClick={() => setSheetOpen(true)}
-        className="flex items-center gap-3 text-start"
+        className="btn-press flex items-center gap-3 text-start"
         style={{ minHeight: 44 }}
         aria-haspopup="dialog"
         aria-label={translate(language, 'contactCard.open', { name: card.formattedName })}

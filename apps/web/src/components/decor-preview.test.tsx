@@ -15,7 +15,7 @@ import type { PackRef } from '@/lib/packs/use-pack-items';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { DecorPreview, type DecorPreviewProps } from './decor-preview';
+import { DECOR_ZOOM_MS, DecorPreview, type DecorPreviewProps } from './decor-preview';
 import type { PackAction } from './pack-shop';
 
 /**
@@ -162,6 +162,20 @@ describe('DecorPreview', () => {
     expect(q('[data-decor-stage-host]')?.getAttribute('data-zoom')).toBe('2');
     await act(async () => void q('[data-decor-stage-host]')?.dispatchEvent(new WheelEvent('wheel', { deltaY: 2000, bubbles: true, cancelable: true })));
     expect(q('[data-decor-stage-host]')?.getAttribute('data-zoom')).toBe('1');
+  });
+
+  test('zoomé, la scène suit le doigt SANS retard : la transition du zoom se coupe pendant le geste (#18327)', async () => {
+    const { deps } = depsAnswering(() => ({ ok: false, status: 500, error: 'x' }));
+    await mount({ deps, pack: RINGS });
+    await mounter.click(q('[data-decor-zoom-in]'));
+    const scene = () => q('[data-decor-stage-host] > div');
+    expect(scene()?.style.transitionDuration).toBe(`${DECOR_ZOOM_MS}ms`);
+    await act(async () => void q('[data-decor-stage-host]')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 10, clientY: 10 })));
+    expect(scene()?.hasAttribute('data-dragging')).toBe(true);
+    expect(scene()?.style.transitionDuration).toBe('0ms');
+    await act(async () => void q('[data-decor-stage-host]')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 30, clientY: 10 })));
+    expect(scene()?.hasAttribute('data-dragging')).toBe(false);
+    expect(scene()?.style.transitionDuration).toBe(`${DECOR_ZOOM_MS}ms`);
   });
 
   test('Échap et ✕ rendent la boutique', async () => {

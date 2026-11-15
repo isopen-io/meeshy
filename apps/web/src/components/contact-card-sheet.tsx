@@ -7,6 +7,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { LONG_PRESS_MS } from '@/lib/view/long-press';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
@@ -60,6 +61,7 @@ export function ContactCardSheet({
   const titleId = useId();
   const { text: announcement, tone, announce } = useLiveAnnouncer();
   useBackDismiss(onClose);
+  const { leave } = useDialogExit(ref, { kind: 'centered' });
 
   useEffect(() => {
     const dialog = ref.current;
@@ -82,7 +84,7 @@ export function ContactCardSheet({
 
   const rows = vcardFieldRows(card, language);
   const subtitle = [card.title, card.organization].filter(Boolean).join(' · ');
-  const close = () => (ref.current?.open ? ref.current.close() : onClose());
+  const close = () => (ref.current?.open ? leave() : onClose());
 
   return (
     <dialog
@@ -90,7 +92,9 @@ export function ContactCardSheet({
       onClose={onClose}
       aria-labelledby={titleId}
       data-contact-sheet=""
+      data-dialog-fade=""
       style={{
+        ...DIALOG_MOTION_STYLE,
         margin: 0,
         padding: 0,
         border: 0,
@@ -108,6 +112,7 @@ export function ContactCardSheet({
         style={{ position: 'relative', zIndex: 41, pointerEvents: 'none' }}
       >
         <section
+          data-contact-sheet-card=""
           className="glass-prominent flex w-full flex-col gap-4 rounded-card p-4"
           style={{
             maxWidth: 440,
@@ -133,7 +138,8 @@ export function ContactCardSheet({
             <button
               type="button"
               onClick={close}
-              className="grid shrink-0 place-items-center rounded-chip"
+              data-contact-close=""
+              className="btn-press grid shrink-0 place-items-center rounded-chip"
               style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
               aria-label={translate(language, 'contactCard.close')}
             >
@@ -241,7 +247,7 @@ function FieldRow({
       <button
         type="button"
         onClick={() => onCopy(row)}
-        className="grid shrink-0 place-items-center rounded-chip"
+        className="btn-press grid shrink-0 place-items-center rounded-chip"
         style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink)' }}
         aria-label={translate(language, 'contactCard.copy', { field: `${row.label} ${row.value}` })}
         data-contact-copy=""

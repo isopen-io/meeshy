@@ -49,21 +49,19 @@ struct StarredMessagesView: View {
     private var rows: some View {
         LazyVStack(spacing: MeeshySpacing.smPlus) {
             ForEach(store.snapshots) { snapshot in
-                StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
-                    .onTapGesture {
-                        navigate(to: snapshot)
+                Button { navigate(to: snapshot) } label: {
+                    StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
+                }
+                .buttonStyle(PressableButtonStyle())
+                .contextMenu {
+                    Button(role: .destructive) {
+                        store.remove(messageId: snapshot.id)
+                    } label: {
+                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                     }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            store.remove(messageId: snapshot.id)
-                        } label: {
-                            Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
-                    .accessibilityAction { navigate(to: snapshot) }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)

@@ -4,7 +4,8 @@
  * L'ENTRÉE se joue sur le `<dialog>` ouvert ; la SORTIE sur son fantôme (`lib/view/dialog-exit.ts`),
  * une copie inerte posée dans la couche supérieure pendant que le vrai dialogue est déjà fermé. Les
  * sélecteurs portent sur des attributs : `data-sheet-presentation` et `data-confirm-dialog` pour le
- * dialogue, `data-dialog-ghost` pour le fantôme. Les durées et la courbe viennent des variables que le
+ * dialogue (`data-dialog-fade` pour une modale faite main qui entre en fondu), `data-dialog-ghost` pour
+ * le fantôme. Les durées et la courbe viennent des variables que le
  * composant pose depuis `SHEET_MOTION_MS`, `DIALOG_FADE_MS` et `SHEET_MOTION_CURVE`.
  *
  * K15 : la feuille monte du bas en 280 ms avec un fondu, et redescend vers le même bord. Les fenêtres
@@ -19,14 +20,32 @@
   pointer-events: none;
 }
 
+/* UNE COUCHE MONTÉE SOUS CONDITION (#18327), posée par `layerMotion()` (`lib/view/layer-presence.ts`) :
+   sa sortie ne prend aucun toucher. Le mouvement joue `translate` et `scale`, jamais `transform`, pour ne
+   pas écraser le placement d'une couche qui se positionne par lui ; la sortie change de NOM d'animation,
+   rejouer le même en sens inverse ne relancerait rien (#18460). */
+[data-layer-motion][data-leaving] {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  [data-layer-motion] {
+    animation: layer-in var(--dialog-fade-ms) var(--dialog-motion-curve) both;
+  }
+
+  [data-layer-motion][data-leaving] {
+    animation-name: layer-out;
+  }
+
   dialog[data-sheet-presentation][open],
-  dialog[data-confirm-dialog][open] {
+  dialog[data-confirm-dialog][open],
+  dialog[data-dialog-fade][open] {
     animation: dialog-fade-in var(--dialog-fade-ms) var(--dialog-motion-curve) both;
   }
 
   dialog[data-sheet-presentation][open]::backdrop,
-  dialog[data-confirm-dialog][open]::backdrop {
+  dialog[data-confirm-dialog][open]::backdrop,
+  dialog[data-dialog-fade][open]::backdrop {
     animation: dialog-fade-in var(--dialog-fade-ms) linear both;
   }
 
@@ -83,6 +102,24 @@
       animation: dialog-fade-out var(--dialog-rise-ms) linear forwards;
     }
   }
+
+  /* La fiche de contact, sur un téléphone (#18320) : sa CARTE monte du bas et y redescend, son voile
+     plein écran, qui vit dans le même dialogue, ne fait que fondre. Le fondu prend la durée de la montée,
+     pour que le fantôme ne parte pas avant que la carte soit descendue. */
+  @media (width < 48rem) {
+    dialog[data-contact-sheet][open],
+    [data-dialog-ghost]:has([data-contact-sheet-card]) {
+      animation-duration: var(--dialog-rise-ms);
+    }
+
+    dialog[data-contact-sheet][open] [data-contact-sheet-card] {
+      animation: dialog-rise var(--dialog-rise-ms) var(--dialog-motion-curve) both;
+    }
+
+    [data-dialog-ghost] [data-contact-sheet-card] {
+      animation: dialog-sink var(--dialog-rise-ms) var(--dialog-motion-curve) forwards;
+    }
+  }
 }
 
 @keyframes dialog-rise {
@@ -122,5 +159,21 @@
   }
   to {
     opacity: 0;
+  }
+}
+
+@keyframes layer-in {
+  from {
+    opacity: 0;
+    translate: var(--layer-shift, 0 4px);
+    scale: var(--layer-scale, 1);
+  }
+}
+
+@keyframes layer-out {
+  to {
+    opacity: 0;
+    translate: var(--layer-shift, 0 4px);
+    scale: var(--layer-scale, 1);
   }
 }

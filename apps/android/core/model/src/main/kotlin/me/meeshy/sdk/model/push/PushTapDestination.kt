@@ -32,6 +32,9 @@ public sealed interface PushTapDestination {
 
     public data class Mood(val statusId: String) : PushTapDestination
     public data class Profile(val userId: String) : PushTapDestination
+
+    /** Le détail d'une communauté (iOS `.communityDetail`, #18061). */
+    public data class Community(val communityId: String) : PushTapDestination
     public data object Notifications : PushTapDestination
     public data class Game(val target: GameTarget) : PushTapDestination
     public data object None : PushTapDestination
@@ -48,6 +51,17 @@ public sealed interface PushTapDestination {
             "community_invite", "community_joined", "community_left",
             "member_joined", "member_left", "member_removed", "member_promoted", "member_demoted",
             "member_role_changed",
+        )
+
+        /**
+         * La famille communauté / membres d'iOS (`RootNotificationNavigator`) : la communauté qu'elle NOMME passe avant la
+         * conversation (#18052) ; sans elle, le chemin d'avant (la conversation, sinon rien).
+         */
+        private val COMMUNITY_TYPES = setOf(
+            "community_invite", "community_joined", "community_left",
+            "member_joined", "member_left", "member_removed", "member_promoted", "member_demoted", "member_role_changed",
+            "added_to_conversation", "new_conversation", "new_conversation_direct", "new_conversation_group",
+            "removed_from_conversation",
         )
 
         private val RELATION_TYPES = setOf(
@@ -78,6 +92,7 @@ public sealed interface PushTapDestination {
 
             return when {
                 type == null -> conversation ?: None
+                type in COMMUNITY_TYPES && payload.communityId != null -> Community(payload.communityId)
                 type in CONVERSATION_TYPES -> conversation ?: postId?.let { content(payload, type, it) } ?: None
                 type in RELATION_TYPES -> payload.senderId?.let(::Profile) ?: Notifications
                 type in GameTarget.NOTIFICATION_TYPES -> Game(GameTarget.forNotification(type) ?: GameTarget.Home)

@@ -19,7 +19,7 @@ struct ProfileContactSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             ProfileSectionHeader(icon: "envelope.fill",
                                  title: String(localized: "profile.section.contact", bundle: .main),
-                                 colorHex: MeeshyColors.indigo300Hex)
+                                 color: MeeshyColors.indigo300)
             VStack(spacing: 0) {
                 row(icon: "envelope.fill",
                     title: String(localized: "profile.email", bundle: .main),
@@ -40,7 +40,7 @@ struct ProfileContactSection: View {
             onOpenSecurity()
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                ProfileFieldIcon(name: icon, accentHex: accentHex)
+                ProfileFieldIcon(name: icon, accentColor: accentHex)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))

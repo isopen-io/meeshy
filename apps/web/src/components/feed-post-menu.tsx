@@ -12,6 +12,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isSceneExportCatalogLoaded, loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
 import { GlyphSvg } from './glyph';
@@ -152,8 +153,9 @@ export function FeedPostMenu({
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
-  const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
+  const { open, mounted, leaving, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
     itemCount: entries.length,
+    exitMs: LAYER_MOTION_MS,
     onScroll: () => setOpen(false),
     onResize: () => setOpen(false),
   });
@@ -221,10 +223,11 @@ export function FeedPostMenu({
         </span>
       </button>
 
-      {open || reporting || editing || viewing || removing ? (
+      {mounted || reporting || editing || viewing || removing ? (
         <Suspense fallback={null}>
           <PostMenuPanel
-            open={open}
+            open={mounted}
+            leaving={leaving}
             entries={entries}
             postId={postId}
             authorName={authorName}

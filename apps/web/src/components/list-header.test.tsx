@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { ListHeader } from './list-header';
 import { StoryRail } from './story-rail';
+import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
@@ -126,10 +127,16 @@ describe('ListHeader — la bande épinglée prend la place du titre', () => {
     mount(false);
   });
 
-  test('la bascule true → false retire la bande', () => {
+  test('la bascule true → false retire la bande, après son fondu de sortie (#18327)', async () => {
     const el = mount(true);
     expect(el.querySelector('[data-rail="pinned"]')).not.toBeNull();
     rerender(el, false);
+    const sortante = el.querySelector('[data-rail="pinned"]')?.closest('[data-layer-motion]');
+    expect(sortante?.hasAttribute('data-leaving')).toBe(true);
+    expect(sortante?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, HIDDEN_CHROME_EASE_OUT_MS + 30));
+    });
     expect(el.querySelector('[data-rail="pinned"]')).toBeNull();
   });
 });

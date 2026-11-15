@@ -75,6 +75,11 @@ const reveals = createCaptionRevealStore();
 
 callStore.subscribe((state) => reveals.follow(state.call));
 
+/** Ce que la fin de l'appel fait aux phrases révélées, à la demande : tout est libéré, bande et journal. */
+export function releaseCaptionReveals(): void {
+  reveals.follow(null);
+}
+
 /** Les phrases révélées de cette surface de cet appel, et le toucher qui en bascule une ; `toggle` ne change qu'avec l'appel ou la surface. */
 export function useCaptionReveals(callId: string, surface: CaptionSurface): { readonly revealed: ReadonlySet<string>; readonly toggle: (id: string) => void } {
   const revealed = useStore(reveals.store, () => reveals.revealed(callId, surface));
