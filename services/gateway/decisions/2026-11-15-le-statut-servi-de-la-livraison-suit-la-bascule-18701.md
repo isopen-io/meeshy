@@ -1,6 +1,6 @@
-# Le statut SERVI de la livraison suit la bascule du suivi exact (2026-11-15, #18701)
+## Le statut SERVI de la livraison suit la bascule du suivi exact (2026-11-15, #18701)
 
-## Contexte
+**Contexte**
 
 `resolveReceivedAt` arbitrait entre trois sources, dans cet ordre :
 
@@ -24,7 +24,7 @@ la position du dernier message réellement livré. La comparer à
 `message.createdAt` confronte une horloge MURALE à une POSITION, et le verdict
 est POSITIF pour tout message antérieur au traitement.
 
-## Pourquoi c'est devenu faux
+**Pourquoi c'est devenu faux**
 
 La prémisse du lot du 2026-07-24 — « Livré = récupéré », donc « tout message
 récupéré par le client a bien été livré » — était vraie tant que le gel était
@@ -46,7 +46,7 @@ dans `READ_STATUS_UPDATED` douze lignes après avoir refusé d'écrire la ligne 
 le drain refuse la livraison, puis annonce la remise, dans le même tour de
 boucle.
 
-## Décision
+**Décision**
 
 **La livraison suit la discipline que la lecture a reçue le 2026-07-24** :
 passé `EXACT_READ_TRACKING_SINCE`, l'absence de gel VEUT DIRE l'absence de
@@ -68,7 +68,7 @@ Ce qui ne change pas :
   bascule s'arme par la composition (staging et production : `2026-09-22`), pas
   par le fait de livrer ce code.
 
-## Ce que la décision COÛTE, et pourquoi c'est le bon sens de l'erreur
+**Ce que la décision COÛTE, et pourquoi c'est le bon sens de l'erreur**
 
 Les deux sites qui avancent le curseur de livraison figent dans le même
 mouvement, mais **hors transaction**. Un processus qui meurt entre l'avance et
@@ -81,7 +81,7 @@ rattrape pas.** Un faux « remis » est une affirmation que le produit fait à
 l'auteur sur quelqu'un d'autre ; un faux « non remis » est une réserve sur
 nous-mêmes. Signal et WhatsApp penchent du même côté.
 
-## Ce que la décision NE tranche PAS
+**Ce que la décision NE tranche PAS**
 
 Le repli reste, **avant la bascule**, borné par l'horloge murale, et un TROU
 ANTÉRIEUR au dernier message livré reste couvert même après elle quand le
@@ -90,7 +90,7 @@ message est pré-bascule. Faire du curseur le **préfixe CONTIGU** de la livrais
 suivant, et il porte sur l'ÉCRITURE, pas sur la lecture : il est consigné en
 **#18731** plutôt que bâclé ici.
 
-## Gardes
+**Gardes**
 
 | garde | ce qu'elle tient |
 |---|---|
