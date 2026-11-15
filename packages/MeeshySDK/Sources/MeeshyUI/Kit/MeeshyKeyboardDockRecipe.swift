@@ -52,6 +52,17 @@ public nonisolated enum MeeshyKeyboardDockRecipe {
         reduceMotion ? 0 : bandTravel
     }
 
+    /// « Réduire les animations » : la bande entre et sort par un fondu de 150 ms (K17).
+    public static let reducedFadeDuration: Double = 0.15
+
+    public static func bandEnterDuration(reduceMotion: Bool) -> Double {
+        reduceMotion ? reducedFadeDuration : bandEnterDuration
+    }
+
+    public static func bandExitDuration(reduceMotion: Bool) -> Double {
+        reduceMotion ? reducedFadeDuration : bandExitDuration
+    }
+
     /// La largeur de la barre dans son conteneur : bords à 8, bornée, donc centrée sur grand écran.
     public static func barWidth(containerWidth: CGFloat) -> CGFloat {
         max(0, min(containerWidth - 2 * edge, maxBarWidth))

@@ -16,6 +16,13 @@ public nonisolated enum SwipeRowRules {
     public static func closesOpenRow(touchAt point: CGPoint, openRowFrame: CGRect) -> Bool {
         !openRowFrame.contains(point)
     }
+
+    /// Une cellule d'action grandit de 0,4 à 1 avec sa révélation ; sous
+    /// « Réduire les animations », elle garde sa taille et seul son fondu dit
+    /// la révélation.
+    public static func cellScale(progress: CGFloat, reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 1 : 0.4 + 0.6 * progress
+    }
 }
 
 // MARK: - Coordinator

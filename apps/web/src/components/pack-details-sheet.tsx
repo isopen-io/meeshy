@@ -72,7 +72,7 @@ export function PackDetailsSheet({
             aria-busy={busy}
             {...(action.kind === 'toggle' ? { 'aria-pressed': pressed } : {})}
             onClick={action.kind === 'swap' ? action.run : onAction}
-            className="min-h-11 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press min-h-11 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={
               primary
                 ? { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }

@@ -97,7 +97,7 @@ export function CommentComposeBar({
               ) : (
                 <img src={choice.thumbnail} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
               )}
-              {choice.kind === 'video' && choice.thumbnail !== null ? <span aria-hidden="true" className="absolute text-caption text-white drop-shadow">▶</span> : null}
+              {choice.kind === 'video' && choice.thumbnail !== null ? <span aria-hidden="true" className="absolute text-caption text-on-media drop-shadow">▶</span> : null}
             </button>
           ))}
         </div>

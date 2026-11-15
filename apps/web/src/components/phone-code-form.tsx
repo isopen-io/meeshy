@@ -24,7 +24,7 @@ export type PhoneCodeDeps = {
   readonly verifyPhoneCode: (code: string) => Promise<ApiResult<unknown>>;
 };
 
-type PhoneStep = 'idle' | 'editing' | 'sending' | 'code' | 'verifying';
+type PhoneStep = 'idle' | 'editing' | 'sending' | 'code' | 'resending' | 'verifying';
 
 export const phonePrimaryButton = { minHeight: 48, background: TINT } as const;
 export const phoneSecondaryButton = {
@@ -63,8 +63,27 @@ export function PhoneCodeForm({
     setPhoneError(translate(language, result.code === 'INVALID_PHONE' ? 'activation.phone.invalid' : 'activation.phone.failed'));
   }
 
+  async function resendPhoneCode() {
+    if (phoneStep !== 'code') return;
+    setPhoneStep('resending');
+    setCodeError(null);
+    const result = await deps.requestPhoneCode(phone);
+    setPhoneStep('code');
+    if (result.ok) {
+      setPhoneCode('');
+      return;
+    }
+    setCodeError(translate(language, 'activation.phone.failed'));
+  }
+
+  function editPhone() {
+    setPhoneCode('');
+    setCodeError(null);
+    setPhoneStep('editing');
+  }
+
   async function confirmPhoneCode() {
-    if (phoneCode.length !== 6 || phoneStep === 'verifying') return;
+    if (phoneCode.length !== 6 || phoneStep !== 'code') return;
     setPhoneStep('verifying');
     setCodeError(null);
     const result = await deps.verifyPhoneCode(phoneCode);
@@ -82,7 +101,7 @@ export function PhoneCodeForm({
       <button
         type="button"
         onClick={() => setPhoneStep('editing')}
-        className="grid place-items-center rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press grid place-items-center rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
         style={phoneSecondaryButton}
       >
         {translate(language, 'activation.phone.add')}
@@ -121,7 +140,7 @@ export function PhoneCodeForm({
           onClick={() => void sendPhoneCode()}
           disabled={phoneStep === 'sending' || phone.trim() === ''}
           aria-busy={phoneStep === 'sending'}
-          className="grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+          className="btn-press grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
           style={phonePrimaryButton}
         >
           {translate(language, phoneStep === 'sending' ? 'activation.phone.busy' : 'activation.phone.send')}
@@ -155,13 +174,34 @@ export function PhoneCodeForm({
       <button
         type="button"
         onClick={() => void confirmPhoneCode()}
-        disabled={phoneCode.length !== 6 || phoneStep === 'verifying'}
+        disabled={phoneCode.length !== 6 || phoneStep !== 'code'}
         aria-busy={phoneStep === 'verifying'}
-        className="grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+        className="btn-press grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
         style={phonePrimaryButton}
       >
         {translate(language, 'activation.phone.verify')}
       </button>
+      <div className="flex flex-wrap justify-between gap-x-4">
+        <button
+          type="button"
+          onClick={editPhone}
+          disabled={phoneStep !== 'code'}
+          className="btn-press min-h-11 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+          style={{ color: TINT }}
+        >
+          {translate(language, 'activation.phone.edit')}
+        </button>
+        <button
+          type="button"
+          onClick={() => void resendPhoneCode()}
+          disabled={phoneStep !== 'code'}
+          aria-busy={phoneStep === 'resending'}
+          className="btn-press min-h-11 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+          style={{ color: TINT }}
+        >
+          {translate(language, 'activation.phone.resend')}
+        </button>
+      </div>
     </>
   );
 }
