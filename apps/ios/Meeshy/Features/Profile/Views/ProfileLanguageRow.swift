@@ -22,7 +22,7 @@ struct ProfileLanguageRow: View {
             onPick()
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                ProfileFieldIcon(name: "globe", accentHex: accentHex)
+                ProfileFieldIcon(name: "globe", accentColor: accentHex)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)

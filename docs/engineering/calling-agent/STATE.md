@@ -1102,3 +1102,27 @@ socket jusqu'au client.
 2. #18600, à découper par répertoire, puis #18630.
 3. #18629, avec l'agent `sre-infra`, puis #18371, #18154 et #18497.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+## Cycle 31 bis — 2026-11-15
+
+- **Base** : `origin/dev` @ `13484857`. **`dev` est verrouillé** (« Lock branch », `enforce_admins`) depuis environ 23:10 UTC le 2026-11-14. Le lot du cycle 31 (#18571, PR #18603, CI verte, QA favorable) n'a pas pu être fusionné : `405 Cannot change this locked branch`, essai refait à 02:35 UTC. Le porteur a été notifié.
+- **Branche** : `claude/determined-volta-vxp60o`. Aucun fichier commun avec #18603, sauf ce journal.
+- **Objectif** : #18535. Un rappel de rejet qui ne rend jamais la main n'empêche plus `ConnectionManager.stop()` de se terminer.
+- **Livré** (seul `zmq_pool/connection_manager.py` change ; ni le protocole ZMQ ni la passerelle) :
+  - `REJECTED_REPORT_SHUTDOWN_GRACE_S = 5.0` est copié dans `self.rejected_report_grace_s`.
+  - Dans `_report_through_cancellation`, l'échéance est fixée à la PREMIÈRE annulation, et une annulation suivante ne la repousse pas. À l'échéance, le report est annulé, une ligne est journalisée (`… abandoned at shutdown after {grace}s: {n} tasks`), puis `CancelledError` est relancée. Sans annulation, le comportement ne change pas.
+- **Tests** : `test_shutdown_report_bounded_after_cancel.py` (7) et `_qa.py` (2, ajoutés par la QA).
+  - Rouge sur la base : `5 failed, 2 passed`, puis `2 failed` pour le fichier QA.
+  - Vert : relancé par moi, `22 passed` avec les témoins de #17063 et #17132.
+  - Suites `test_shutdown_*` et `*zmq*` : `357 passed` avant (plus 5 rouges, les nouveaux témoins), `364 passed` après. Dans les deux cas, `6 skipped, 5 errors` connues (`TestRealTranslatorIntegration`).
+  - `-W error::RuntimeWarning` : `340 passed`.
+  - Mutations QA : 14 sur 14 tuées. Deux survivaient d'abord (`report.cancel()` retiré, total = premier lot) ; le fichier QA les tue.
+- **QA** : favorable avec réserves → #18611. `stop_workers()` → `reject_pending_at_shutdown()` et `_refuse_at_shutdown` appellent encore le rappel sans délai. Un rappel qui avale `CancelledError` laisse un report orphelin. Le commentaire sur les 10 s de `docker stop` est optimiste.
+- **Fusion** : ce journal est aussi modifié par #18603, qui ajoute la section du cycle 31. La seconde PR fusionnée aura un conflit à la fin du fichier : il faut garder les deux sections, la 31 avant la 31 bis.
+
+### Cycle suivant : par où reprendre
+
+0. Vérifier le verrou de `dev`. S'il est levé, fusionner #18603, puis la PR de ce cycle (conflit de journal, voir plus haut).
+1. #18611, puis #17133.
+2. #18599 et #18600, les suites de #18571.
+3. #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
