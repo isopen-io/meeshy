@@ -225,6 +225,39 @@ schéma.
 > elle, porte bien ce qu'ils réclament (`RELATION_FEATURES` contient
 > `'device.battery'`, `schema.prisma:200` déclare `batterySharingDisabledAt`).
 
+## Correction à ma propre explication du cycle 171 — le mécanisme n'est PAS établi
+
+Le journal du cycle 171 et le corps de la PR #18705 affirment que « chaque
+dispatch annule le précédent sur la même branche », et comptent cinq runs tués
+ainsi. **La règle de concurrence est réelle et citée correctement**
+(`cancel-in-progress` vaut vrai hors `dev` et `main`), et la corrélation tenait
+pour ces cinq runs — chacun avait bien un dispatch postérieur.
+
+Elle ne tient plus. Mesuré ce soir sur ce lot, DEUX dispatches annulés :
+
+| run | créé | annulé | dispatch postérieur ? |
+|---|---|---|---|
+| `43771352962` | 22:48:46 | 22:51:31 | **non** — le suivant est à 22:52:19, APRÈS |
+| `43771678426` | 22:52:19 | 23:00:47 | **non** — aucun |
+
+Et le dépôt ne déclare **aucun** annuleur (`grep` sur
+`cancel-workflow`/`skip-duplicate` dans `.github/workflows/` : vide). Le run du
+cycle 171 qui a abouti avait tourné 38 minutes sans être touché, donc ce n'est
+pas déterministe non plus.
+
+> **Une corrélation qui tient sur cinq cas n'est pas un mécanisme.** J'ai écrit
+> « chaque dispatch annule le précédent » parce que c'était vrai de tous les cas
+> que j'avais, et la phrase a la forme d'une loi. Le discriminant qui manquait
+> est trivial et je ne l'avais pas posé : **y a-t-il un run postérieur ?** —
+> deux appels d'API, et ils rendent « non ».
+
+Ce qui reste établi, et qu'il faut garder : la règle de concurrence existe, elle
+suffit à expliquer les annulations que J'AI causées en relançant, et le verdict
+agrégé reste trompeur (il nomme ce qui n'a pas RÉUSSI). Ce qui n'est PAS établi :
+la cause des annulations sans dispatch postérieur. Elle demande une visibilité
+que cette session n'a pas — limites Actions du compte, politique d'organisation,
+réclamation de runner.
+
 ## Ce que le cycle n'a pas pris
 
 | # | ce que c'est | pourquoi pas ce lot |
