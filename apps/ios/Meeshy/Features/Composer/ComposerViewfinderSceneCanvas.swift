@@ -24,6 +24,11 @@ struct ComposerViewfinderSceneCanvas: View {
         let onDismiss: () -> Void
     }
 
+    /// Ce que le lâcher d'un objet sur une cible fait de la scène (#18712).
+    var dropActions: ComposerSceneDragDrop.Actions?
+    /// Le glisser d'un objet, remis aux cibles du chrome (`feeding`).
+    var onItemDragged: ((StoryCanvasItemDrag) -> Void)?
+
     /// Le texte remis au canvas UNE passe après son montage : posé sur l'aperçu à l'instant où
     /// le premier objet naît, il n'a encore ni calque ni fenêtre, et la saisie n'y prendrait pas.
     @State private var mountedTextId: String?
@@ -45,8 +50,7 @@ struct ComposerViewfinderSceneCanvas: View {
         let prendLeDoigt = ComposerViewfinderScene.route(
             onChrome: false, onSceneObject: true,
             objectsTakeTouches: ComposerViewfinderScene.objectsTakeTouches(
-                stage: capture.stage, holding: capture.holdStartedAt != nil,
-                editing: capture.phase.isEditing),
+                stage: capture.stage, holding: capture.holdStartedAt != nil),
             libraryOpen: host.showsOpeningLibrary) == .sceneObject
         let relais = host.sceneSelectionRelay
         let saisie = ComposerViewfinderTyping.textId(host).map { id in
@@ -59,7 +63,22 @@ struct ComposerViewfinderSceneCanvas: View {
                                              selectedItemId: saisie == nil ? host.selectedSceneItemId : nil,
                                              takesTouches: prendLeDoigt,
                                              onItemTapped: { id, kind in relais.selectSceneItem(id, kind: kind) },
-                                             typing: saisie)
+                                             typing: saisie,
+                                             dropActions: ComposerSceneDragDrop.Actions(
+                                                remove: { id in
+                                                    host.retractMedia(objectIds: [id])
+                                                    guard host.selectedSceneItemId == id else { return }
+                                                    (host.selectedSceneItemId, host.selectedSceneItemKind) = (nil, nil)
+                                                },
+                                                move: { id, place in host.viewModel.moveElement(id: id, to: place) },
+                                                duplicate: { id in host.viewModel.duplicateElement(id: id) }))
+    }
+
+    /// Le canvas qui dit ses glissers aux cibles du chrome (#18712).
+    func feeding(_ drag: ComposerSceneDragDrop) -> ComposerViewfinderSceneCanvas {
+        var canvas = self
+        canvas.onItemDragged = { drag.feed($0) }
+        return canvas
     }
 
     var body: some View {
@@ -80,7 +99,8 @@ struct ComposerViewfinderSceneCanvas: View {
             inlineEditInputLink: typing?.inputLink,
             paintsSceneBackground: false,
             passesThroughEmptyTouches: true,
-            inlineEditFloorGlobalY: typing == nil ? .greatestFiniteMagnitude : keyboardTop)
+            inlineEditFloorGlobalY: typing == nil ? .greatestFiniteMagnitude : keyboardTop,
+            onItemDragged: onItemDragged)
         .allowsHitTesting(takesTouches)
         .accessibilityIdentifier("composer.viewfinder.scene")
         .task(id: typing?.textId) { mountedTextId = typing?.textId }
@@ -189,5 +209,66 @@ enum ComposerViewfinderOverlay {
             host.viewModel.toggleBackground(id: fond)
         }
         HapticFeedback.light()
+    }
+}
+
+/// **Glisser un objet posé sur la caméra : la poubelle paraît en bas, la copie en haut** (#18712).
+/// Les cibles sont celles du kit (`MeeshyDragTargets`, K25) — leur loi dit la cible survolée, qui
+/// grossit, et tient son survol à la frontière. Le glisser reste progressif et annulable : lâché
+/// hors des cibles, l'objet reste où le doigt l'a mené ; un glisser annulé ne déclenche rien.
+@MainActor
+final class ComposerSceneDragDrop: ObservableObject {
+    /// L'objet qu'on glisse, et sa place d'avant le glisser, en unités de scène.
+    struct Dragged: Equatable {
+        let id: String
+        let start: CGPoint
+    }
+
+    /// Ce que l'hôte fait du lâcher.
+    struct Actions {
+        let remove: (String) -> Void
+        let move: (String, CGPoint) -> Void
+        let duplicate: (String) -> Void
+    }
+
+    let targets = MeeshyDragTargetsState()
+    private(set) var dragged: Dragged?
+
+    nonisolated deinit {}
+
+    func feed(_ drag: StoryCanvasItemDrag) {
+        switch drag {
+        case .began(let id, let finger, let start):
+            dragged = Dragged(id: id, start: start)
+            targets.begin()
+            targets.move(to: finger)
+        case .moved(let finger):
+            targets.move(to: finger)
+        case .ended(let finger):
+            targets.move(to: finger)
+            targets.end()
+            dragged = nil
+        case .cancelled:
+            targets.cancel()
+            dragged = nil
+        }
+    }
+
+    /// Le lâcher sur la cible survolée, appelé par le kit pendant `end()`.
+    func drop(_ target: MeeshyDragTarget, actions: Actions) {
+        guard let dragged else { return }
+        Self.drop(target, dragged: dragged, actions: actions)
+    }
+
+    /// La poubelle retire l'objet ; la copie le duplique et RAMÈNE l'original à sa place d'avant
+    /// le glisser — la copie naît à côté de lui.
+    static func drop(_ target: MeeshyDragTarget, dragged: Dragged, actions: Actions) {
+        switch target {
+        case .remove:
+            actions.remove(dragged.id)
+        case .duplicate:
+            actions.move(dragged.id, dragged.start)
+            actions.duplicate(dragged.id)
+        }
     }
 }
