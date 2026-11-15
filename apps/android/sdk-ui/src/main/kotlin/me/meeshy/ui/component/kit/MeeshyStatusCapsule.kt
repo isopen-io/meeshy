@@ -114,8 +114,8 @@ public fun MeeshyStatusCapsule(
     Box(
         modifier = modifier
             .widthIn(max = MeeshyStatusCapsuleRecipe.maxWidth)
-            .graphicsLayer { translationY = drag.offset.value }
             .then(drag.gesture)
+            .graphicsLayer { translationY = drag.offset.value }
             .then(if (onDismiss != null) Modifier.dismissOnEscapeKey { latestDismiss.value?.invoke() } else Modifier)
             .then(
                 if (onDismiss != null) {
