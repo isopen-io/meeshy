@@ -213,6 +213,43 @@ Un témoin existant a changé : `CallEventsHandler.test.ts` figeait
 assertait l'absence même qu'on corrige — l'enrichir est le lot, pas une
 concession.
 
+## Ce que la CI a nommé et que j'avais rangé sous « environnement »
+
+Le premier passage de la suite COMPLÈTE du gateway en local a rendu **18 rouges
+sur 41 662**. Le journal n'en avait conservé qu'un — `UploadProcessor` HEIC, qui
+nomme sa cause (`image/heic illisible par le serveur`, libvips sans HEIF dans ce
+conteneur) — et j'en ai conclu « environnementaux », au pluriel, sur la foi d'un
+seul.
+
+La CI en a nommé un qui ne l'était pas : **la règle 3 de
+`gateway-test-file-size-budget`** — « le cumul des lignes hors budget ne remonte
+pas », `socketio/__tests__/CallEventsHandler.test.ts : 4650 → 4656`. Ce fichier
+porte 4 649 lignes de dette héritée, et la règle du dépôt est explicite :
+*ajouter à un fichier déjà hors budget est interdit*. Mon enrichissement de
+l'assertion `TARGET_NOT_FOUND` l'avait fait grossir de sept lignes au lieu
+d'une.
+
+Il n'y avait rien à EXTRAIRE : l'assertion devait changer de **forme**, pas de
+taille. Elle tient sur une ligne, le fichier revient à l'identique de la base, et
+la raison du changement vit là où elle a sa place — la suite neuve et ce journal.
+
+Le relevé complet, fait APRÈS plutôt que supposé avant : **six des sept suites
+rouges sont des suites de codec d'image** (`ExifStrip.gain-map`,
+`ExifStrip.orientation`, `tus-handler-heif-conversion`,
+`UploadProcessor.heif-conversion`, `heif-upload-conversion`, `avif-variants`) —
+toutes exigent un libvips avec HEIF et AVIF, absent d'ici, et **les tranches 1/3
+et 3/3 du gateway passent en CI**, ce qui le PROUVE au lieu de le supposer. La
+septième était la mienne.
+
+> Le dépôt porte déjà la leçon — « attribuer un rouge à la machine est une
+> AFFIRMATION qui se vérifie » (cycle, 2026-11-14, #18466). Je l'ai enfreinte en
+> la connaissant, et la forme exacte de l'erreur mérite d'être dite : **je n'ai
+> pas affirmé qu'un rouge était environnemental, j'ai affirmé qu'un ENSEMBLE de
+> rouges l'était en ayant lu un seul de ses membres.** Un journal qui ne garde
+> que la queue du flux rend un échantillon de taille 1, et un échantillon de
+> taille 1 ne décrit jamais un ensemble de 7. Le geste qui coûte deux secondes
+> est `| grep -E "^FAIL"`, et il aurait nommé la règle du budget avant la CI.
+
 ## Suivi ouvert
 
 | # | ce que c'est | état |

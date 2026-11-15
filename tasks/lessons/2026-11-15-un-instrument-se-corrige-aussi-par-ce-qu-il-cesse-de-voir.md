@@ -55,3 +55,27 @@ Ce balayage admet une ligne ambiguë comme rendant l'acquittement, et le dit dan
 son doc-comment. **Un faux positif fait OUVRIR le site ; un faux négatif le
 tait.** Pour un cliquet dont l'inventaire doit tendre vers le vide, seul le
 premier est récupérable.
+
+### Et l'instrument le plus faux du cycle était ma façon de LIRE un résultat
+
+Même cycle, autre erreur, et celle-ci n'était pas dans un balayage mais dans un
+`tail`. La suite complète du gateway a rendu **18 rouges sur 41 662** ; mon
+journal de run n'avait gardé que la fin du flux, donc UN seul des sept noms —
+`UploadProcessor` HEIC, qui nomme sa cause en clair. J'ai écrit
+« environnementaux », au pluriel.
+
+La CI a nommé celui qui ne l'était pas : la règle 3 du budget de taille des
+suites (`CallEventsHandler.test.ts : 4650 → 4656`), c'est-à-dire mon propre
+diff, contre une règle que le dépôt énonce explicitement — *ajouter à un fichier
+déjà hors budget est interdit*.
+
+> Le dépôt porte déjà « attribuer un rouge à la machine est une AFFIRMATION qui
+> se vérifie » (#18466). La forme neuve est plus précise : **je n'ai pas affirmé
+> qu'un rouge était environnemental, j'ai affirmé qu'un ENSEMBLE de rouges
+> l'était en ayant lu un seul de ses membres.** Un échantillon de taille 1 ne
+> décrit pas un ensemble de 7, et un `tail` en rend toujours un.
+
+Le geste qui coûte deux secondes : capturer `| grep -E "^(FAIL|Tests:)"` AVANT
+de qualifier quoi que ce soit. **Un verdict sur un ensemble exige l'énumération
+de l'ensemble** — c'est la même exigence que « un compte se compte, il ne
+s'hérite pas » (cycle 93), appliquée à mes propres sorties d'outil.
