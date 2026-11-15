@@ -174,10 +174,25 @@ final class ComposerOpeningPlanTests: XCTestCase {
     }
 
     /// **L'en-tête et ses boutons se voient à MI-HAUTEUR comme déplié** (porteur
-    /// 2026-11-11) : le sélecteur en ligne les masque par défaut au cran moyen.
+    /// 2026-11-11, puis #18709 : sur iPhone SE, l'en-tête du sélecteur restait hors
+    /// écran au cran moyen). Le composer pose SON en-tête au-dessus du sélecteur, qui
+    /// ne valide plus rien lui-même : la sélection se compose en brouillon.
     func test_openingLibrary_keepsItsHeaderAndButtons_atEveryDetent() throws {
-        let feuille = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift")
+        let feuille = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift"))
         XCTAssertTrue(feuille.contains(".photosPickerAccessoryVisibility(.visible, edges: .all)"))
+        XCTAssertTrue(feuille.contains(".photosPickerDisabledCapabilities(.selectionActions)"),
+                      "le ✓ du sélecteur ne valide plus : c'est l'en-tête du composer")
+        XCTAssertTrue(feuille.contains("PhotosPicker(selection: $draft"), "la sélection se compose en brouillon")
+        let entete = try XCTUnwrap(feuille.range(of: "ComposerLibraryHeader("))
+        let selecteur = try XCTUnwrap(feuille.range(of: "PhotosPicker(selection:"))
+        XCTAssertLessThan(entete.lowerBound, selecteur.lowerBound, "l'en-tête se pose AU-DESSUS du sélecteur")
+    }
+
+    func test_libraryHeader_validatesOnlyAChoice_andHandsItOverWhole() {
+        XCTAssertFalse(ComposerLibraryHeader.validates(count: 0), "rien de choisi : Valider se tait")
+        XCTAssertTrue(ComposerLibraryHeader.validates(count: 1))
+        XCTAssertTrue(ComposerLibraryHeader.validates(count: ComposerOpeningLibrarySheet.maxSelectionCount))
     }
 
     func test_settings_surfaceBothOpeningToggles() throws {

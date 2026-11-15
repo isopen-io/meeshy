@@ -259,6 +259,38 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertTrue(code.contains("typingTouchCatcher"), "un toucher à vide termine la saisie")
     }
 
+    // MARK: - La galerie ouverte : un toucher sur le viseur la referme (#18709)
+
+    func test_route_whileTheLibraryIsOpen_anyViewfinderTouchClosesIt_andNeverShoots() {
+        XCTAssertEqual(ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: true,
+                                                     libraryOpen: true), .closeLibrary,
+                       "ni photo, ni vidéo, ni zoom : la feuille se referme")
+        XCTAssertEqual(ComposerViewfinderScene.route(onChrome: false, onSceneObject: true, objectsTakeTouches: true,
+                                                     libraryOpen: true), .closeLibrary,
+                       "un objet sous la feuille ouverte ne prend pas le doigt")
+        XCTAssertEqual(ComposerViewfinderScene.route(onChrome: true, onSceneObject: false, objectsTakeTouches: true,
+                                                     libraryOpen: true), .chrome, "un contrôle du viseur passe avant")
+        XCTAssertEqual(ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: true,
+                                                     libraryOpen: false), .capture)
+    }
+
+    func test_chrome_whileTheLibraryIsOpen_catchesTheTouch_aboveTheObjects_belowTheControls() throws {
+        let code = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        let objets = try XCTUnwrap(code.range(of: "            sceneObjectsLayer\n", options: .regularExpression))
+        let voile = try XCTUnwrap(code.range(of: "            libraryTouchCatcher\n", options: .regularExpression),
+                                  "un toucher sur le viseur referme la galerie")
+        let chrome = try XCTUnwrap(code.range(of: "topRow.opacity(showsTopRow"))
+        XCTAssertLessThan(objets.lowerBound, voile.lowerBound, "la galerie ouverte, les objets ne prennent rien")
+        XCTAssertLessThan(voile.lowerBound, chrome.lowerBound, "la croix et le rail restent au-dessus")
+        XCTAssertTrue(code.contains("ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: false, libraryOpen: true)"),
+                      "le voile lit la loi du toucher")
+        let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneViewfinderMount.swift")
+        XCTAssertTrue(montage.contains(".environment(\\.composerViewfinderClosesLibrary"),
+                      "le composer dit au viseur comment refermer sa galerie")
+        let toile = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerViewfinderSceneCanvas.swift")
+        XCTAssertTrue(toile.contains("libraryOpen: host.showsOpeningLibrary"), "les objets se taisent sous la galerie ouverte")
+    }
+
     // MARK: - En retouche, la colonne d'outils reste à gauche (#18638)
 
     func test_editRail_isTheLeadingColumnOfTheViewfinder_notABottomRow() throws {

@@ -58,10 +58,14 @@ nonisolated enum ComposerViewfinderScene {
         case capture
         /// Une zone vide pendant qu'on écrit : la saisie se termine, rien n'est pris.
         case endTyping
+        /// La galerie ouverte par-dessus (#18709) : le toucher la referme, sans prise ni zoom.
+        case closeLibrary
     }
 
-    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool, typing: Bool = false) -> Touch {
+    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool, typing: Bool = false,
+                      libraryOpen: Bool = false) -> Touch {
         if onChrome { return .chrome }
+        if libraryOpen { return .closeLibrary }
         if onSceneObject && objectsTakeTouches { return .sceneObject }
         return typing ? .endTyping : .capture
     }

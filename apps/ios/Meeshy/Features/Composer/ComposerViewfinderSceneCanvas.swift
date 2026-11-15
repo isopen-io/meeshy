@@ -46,7 +46,8 @@ struct ComposerViewfinderSceneCanvas: View {
             onChrome: false, onSceneObject: true,
             objectsTakeTouches: ComposerViewfinderScene.objectsTakeTouches(
                 stage: capture.stage, holding: capture.holdStartedAt != nil,
-                editing: capture.phase.isEditing)) == .sceneObject
+                editing: capture.phase.isEditing),
+            libraryOpen: host.showsOpeningLibrary) == .sceneObject
         let relais = host.sceneSelectionRelay
         let saisie = ComposerViewfinderTyping.textId(host).map { id in
             Typing(textId: id, inputLink: host.keyboardDock.link,

@@ -9,6 +9,13 @@ struct ComposerSceneViewfinderMount<Contenu: View>: View {
     let host: MeeshyComposerHost
     @ViewBuilder let contenu: Contenu
 
+    /// La galerie ouverte par-dessus, comment la refermer ; `nil` fermée (#18709).
+    private var closesLibrary: (@MainActor () -> Void)? {
+        guard host.showsOpeningLibrary else { return nil }
+        let hote = host
+        return { hote.showsOpeningLibrary = false }
+    }
+
     var body: some View {
         let modes = ComposerSceneCamera.modes(for: host.selectedFormat)
         let owner = host.sceneCaptureOwner
@@ -25,6 +32,8 @@ struct ComposerSceneViewfinderMount<Contenu: View>: View {
             contenu
         }
         .environment(\.composerViewfinderSceneEntry, { host.handleViewfinderEntry($0) })
+        // La galerie ouverte par-dessus, un toucher sur le viseur la referme (#18709).
+        .environment(\.composerViewfinderClosesLibrary, closesLibrary)
         // Le composer démonté rend sa caméra : ni voyant vert, ni second objectif au suivant (#17469).
         .background(ComposerCaptureTeardown(release: { owner.release() }))
         // L'outil fermé, le viseur revient sur la scène composée (#17432).
