@@ -597,6 +597,9 @@ const PENDING_CLIENT_ENTRIES = {
   'MeEndpoint.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
   'MeEndpoint.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
   'MeEndpoint.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
+  // Plusieurs appareils d'un compte (#18389) : chaque appareil relit le partage que la passerelle sert ; le web le fait,
+  // iOS et Android suivront (#18578).
+  'RelationsEndpoint.locationsMine': { issue: 18578, reason: 'GET /relations/locations/mine — l’appareil se recale sur le partage servi' },
   'RelationsEndpoint.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
 };
 

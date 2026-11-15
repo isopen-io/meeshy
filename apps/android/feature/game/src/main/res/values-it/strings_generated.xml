@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Scintille</string>
     <string name="game_concept_points_tip_1">Torna ogni giorno: una Fiamma accesa nutre le tue scintille.</string>
     <string name="game_concept_points_tip_2">Attiva uno slancio per moltiplicare le tue scintille.</string>
-    <string name="game_concept_points_use">Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto.</string>
+    <string name="game_concept_points_use">Coniare una Meesh ne fissa una parte nella moneta, custodita per sempre nella tua Eredità; il tuo livello segue la luce che ti resta.</string>
     <string name="game_concept_prestige_name">La Rinascita</string>
     <string name="game_concept_prestige_tip_1">Porta la tua luce fino al livello 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s fino al livello %2$s.</string>
     <string name="game_guide_moment_first_level_short">Livello %1$s · %2$s fino al prossimo.</string>
     <string name="game_guide_moment_first_level_what">La tua luce cresce: primo livello superato.</string>
-    <string name="game_guide_moment_first_mint_means">Una parte della tua luce si è fissata nella moneta: il tuo livello è sceso di altrettanto, il tuo rango mai.</string>
+    <string name="game_guide_moment_first_mint_means">Una parte della tua luce si è fissata nella moneta, custodita per sempre; la tua gloria è cresciuta, e il tuo livello segue la luce che ti resta.</string>
     <string name="game_guide_moment_first_mint_next">Ciò che hai ricevuto resta ricevuto: ogni nuova scintilla fa ricrescere la tua luce.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Coniare fissa %1$s della tua luce in una moneta: il tuo livello scende di altrettanto, e guadagni +%2$s di gloria.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Coniare fissa %1$s della tua luce in una moneta, senza farti perdere un livello, e guadagni +%2$s di gloria.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Coniare fissa %1$s della tua luce in una moneta custodita per sempre, e guadagni +%2$s di gloria; il tuo livello segue la luce che ti resta.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Coniare fissa %1$s della tua luce in una moneta, senza cambiare il tuo livello, e guadagni +%2$s di gloria.</string>
     <string name="game_guide_moment_first_mint_possible_next">Conia ora, oppure lascia prima crescere la tua luce.</string>
     <string name="game_guide_moment_first_mint_possible_short">Una Meesh fissa %1$s della tua luce.</string>
     <string name="game_guide_moment_first_mint_possible_what">Puoi coniare la tua prima Meesh.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Ogni livello richiede un po’ più di scintille del precedente.</string>
     <string name="game_guide_step_levels_next">Al livello 5, i tuoi antenati ti mandano il tuo primo sogno.</string>
     <string name="game_guide_step_levels_what">Venti stati della tua luce, e livelli che il tuo rango apre.</string>
-    <string name="game_guide_step_mint_means">Coniare fissa una parte della tua luce nella moneta: il tuo livello scende di altrettanto, il tuo rango mai, e ogni conio ti porta gloria.</string>
+    <string name="game_guide_step_mint_means">Coniare fissa una parte della tua luce nella moneta, custodita per sempre, e ogni conio ti porta gloria che fa avanzare il tuo rango; il tuo livello segue la luce che ti resta.</string>
     <string name="game_guide_step_mint_next">La tua gloria ti dà il tuo nome: il tuo rango.</string>
     <string name="game_guide_step_mint_what">Quando la tua luce è abbastanza grande, si conia una Meesh.</string>
     <string name="game_guide_step_missions_means">Compili per far apparire l’Offerta e nutrire la tua Fiamma.</string>

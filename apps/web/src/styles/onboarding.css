@@ -136,7 +136,10 @@
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ios-indigo-300) 20%, transparent);
-  transition: flex-grow 500ms var(--onb-spring), background-color 300ms ease;
+  /* La largeur change d'un coup ; le segment rejoint sa nouvelle boîte par
+     translate et scale (`ProgressSegments`, #18322, M6). */
+  transform-origin: 0 50%;
+  transition: background-color 300ms ease;
 }
 
 .onb-progress-seg-on {

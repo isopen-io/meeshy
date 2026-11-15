@@ -322,6 +322,7 @@
     "GET /api/v1/posts/:postId/objects/:objectId/responses",
     "GET /api/v1/reactions/user/:userId",
     "GET /api/v1/relations/:userId/location/history",
+    "GET /api/v1/relations/locations/mine",
     "GET /api/v1/sounds/:id",
     "GET /api/v1/sounds/:id/posts",
     "GET /api/v1/u/:username",
