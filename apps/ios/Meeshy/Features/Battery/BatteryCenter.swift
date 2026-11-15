@@ -188,7 +188,7 @@ extension BatteryCenter {
 
     /// Le push silencieux `battery_pull` : relever MAINTENANT, hors cadence (la socket si elle est là, sinon REST),
     /// puis rendre la main à iOS. Rend `false` pour tout autre push.
-    nonisolated static func handledPullWake(
+    static func handledPullWake(
         _ userInfo: [AnyHashable: Any],
         completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) -> Bool {
