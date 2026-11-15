@@ -214,7 +214,7 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Pas de transcription mobile")
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Étape 6: Lancement transcription Whisper...")
-            logger.info(f"🔍 [TRANSLATOR-TRACE] Audio path: {audio_path}")
+            logger.info(f"🔍 [TRANSLATOR-TRACE] Audio path: {'fourni' if audio_path else 'N/A'}")
             logger.info(f"🔍 [TRANSLATOR-TRACE] Audio exists: {Path(audio_path).exists() if audio_path else False}")
             if audio_path and Path(audio_path).exists():
                 file_size = Path(audio_path).stat().st_size

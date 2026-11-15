@@ -240,7 +240,7 @@ class AudioHandler:
                     f"url={request_data.get('audioUrl') or 'none'}"
                 )
 
-            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
+            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}")
 
             # Flag pour savoir si on doit nettoyer le fichier temp après.
             # 'binary' (ZMQ multipart, le chemin PRIMAIRE) écrit aussi un fichier
