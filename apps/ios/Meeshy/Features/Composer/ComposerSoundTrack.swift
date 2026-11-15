@@ -17,7 +17,7 @@ extension ComposerCaptureCopy {
         }
     }
 
-    static func editToolSymbol(_ tool: ComposerEditTool) -> String {
+    nonisolated static func editToolSymbol(_ tool: ComposerEditTool) -> String {
         switch tool {
         case .crop: return "crop"
         case .text: return "textformat"
