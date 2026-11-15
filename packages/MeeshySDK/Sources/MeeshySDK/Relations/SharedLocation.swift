@@ -145,3 +145,68 @@ public struct SharedLocationBounds: Sendable, Equatable {
         (minLatitude...maxLatitude).contains(latitude) && (minLongitude...maxLongitude).contains(longitude)
     }
 }
+
+// MARK: - MON partage, tel que la passerelle le sert (#18389, #18578)
+
+/// `location:share-own-changed` — sans charge : MON partage a changé sur la passerelle (démarré, remplacé, arrêté), sur
+/// cet appareil ou sur un autre du compte. L'appareil relit `GET /relations/locations/mine` et s'y recale.
+public struct SharedLocationOwnChanged: Decodable, Sendable, Equatable {
+    public init() {}
+}
+
+/// Une personne à qui la passerelle sert MA position : qui, à quelle précision, jusqu'à quand. Jamais une position.
+public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
+    public let userId: String
+    public let precision: SharedLocationPrecision
+    public let expiresAt: Date
+
+    public init(userId: String, precision: SharedLocationPrecision, expiresAt: Date) {
+        self.userId = userId
+        self.precision = precision
+        self.expiresAt = expiresAt
+    }
+
+    private enum CodingKeys: String, CodingKey { case userId, precision, expiresAt }
+
+    /// Une précision inconnue se relit comme la ville (on ouvre plus, jamais l'inverse) ; un identifiant vide ou une
+    /// échéance illisible rend la personne illisible, et le cliché l'écarte.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
+        }
+        guard let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
+            throw DecodingError.dataCorruptedError(forKey: .expiresAt, in: c, debugDescription: "instant illisible")
+        }
+        let precision = (try? c.decode(String.self, forKey: .precision)).flatMap(SharedLocationPrecision.init(rawValue:)) ?? .city
+        self.init(userId: userId, precision: precision, expiresAt: expiresAt)
+    }
+}
+
+/// `GET /relations/locations/mine` — MON partage en cours, tel que la passerelle le sert. Un partage par compte : c'est
+/// lui qui fait foi, pour chacun des appareils du compte. Une personne illisible est écartée sans faire tomber le cliché ;
+/// une réponse SANS liste lisible n'est pas « plus rien n'est partagé » mais « je ne sais pas » : elle échoue, et
+/// l'appareil garde sa liste et ses « Arrêter » (iso `decodeOwnSharedLocation` du web).
+public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
+    public let recipients: [SharedLocationOwnRecipient]
+
+    public init(recipients: [SharedLocationOwnRecipient]) {
+        self.recipients = recipients
+    }
+
+    private enum CodingKeys: String, CodingKey { case recipients }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
+    }
+
+    private struct Lenient: Decodable {
+        let value: SharedLocationOwnRecipient?
+
+        init(from decoder: Decoder) throws {
+            value = try? SharedLocationOwnRecipient(from: decoder)
+        }
+    }
+}

@@ -67,11 +67,9 @@ struct CallPreviewSoundButton: View {
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .frame(minHeight: 50)
-                    .adaptiveLiquidGlass(
-                        in: Capsule(),
-                        tint: audible ? nil : Color.white.opacity(MeeshyOpacity.light),
-                        interactive: true
-                    )
+                    .adaptiveLiquidGlass(in: Capsule(),
+                                         tint: audible ? nil : Color.white.opacity(MeeshyOpacity.light),
+                                         interactive: true)
                 }
                 .pressable()
                 .accessibilityHint(String(localized: "call.preview.sound.hint", defaultValue: "Écoute l'appelant avant de décrocher", bundle: .main))

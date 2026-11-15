@@ -14,17 +14,20 @@ import {
   type MessageCardToggle,
 } from '@/lib/export/message-card-format';
 import type { CardPart, CardRegion, MessageCardInput, MessageCardPart } from '@/lib/export/message-card-layout';
-import { cardOutputsOf, extensionOfType, type CardOutput } from '@/lib/export/message-card-output';
+import { cardOutputsOf, extensionOfType, motionDurationOf, type CardOutput } from '@/lib/export/message-card-output';
+import { BUILT_IN_MODELS, DEFAULT_MODEL_ID, applyModel, modelById, offeredLinks, type CardModel } from '@/lib/export/message-card-models';
 import type { CardSource } from '@/lib/export/message-card-paint';
 import type { CardMedia } from '@/lib/export/message-card-media';
+import { STANDARD_SCROLL_SPEED, scrollPlanOf, type ScrollPlan, type ScrollSpeed } from '@/lib/export/message-card-scroll';
 import { messageCardFileName, type CardMediaAuthor, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
-import { randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
+import { CARD_LINKS, randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
 import { createThumbnailCache } from '@/lib/export/message-card-thumbnails';
-import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
+import { readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
 import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-export-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
+import { BackdropRow, ScrollRow, defaultBackdropLoader, useChosenBackdrop, type BackdropLoader } from './thread-export-backdrop';
 import type { FrameChoice, VisualChoice } from './thread-export-frame';
 import { ExportGallery } from './thread-export-gallery';
 import { MediaFailure, OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
@@ -62,7 +65,11 @@ import { ExportTray, TAB_OF_PART, type ExportTab } from './thread-export-tray';
  * sont chargés À LA DEMANDE : le fil n'en paie rien.
  */
 
-const POPULAR_COUNT = 6;
+/** Les liaisons qu'offre la maquette choisie — toutes sans maquette. */
+const linksOf = (id: string | null): readonly CardLinkId[] => {
+  const model = modelById(id);
+  return model === null ? CARD_LINKS : offeredLinks(model);
+};
 
 /** La largeur d'une vignette peinte : deux fois sa plus grande largeur affichée, pour un écran dense. */
 const THUMB_WIDTH = 240;
@@ -114,6 +121,20 @@ type Thumbnailer = (input: MessageCardInput, width: number, sources: readonly (C
 const defaultPainter: Painter = async (input, sources) => (await import('@/lib/export/message-card-paint')).renderMessageCard(input, document, sources);
 const defaultThumbnailer: Thumbnailer = async (input, width, sources) =>
   (await import('@/lib/export/message-card-paint')).renderMessageCardThumbnail(input, width, document, sources);
+
+/** Les hauteurs de la carte qui défile (#18671) — `null` : elle tient dans son format. */
+type ScrollMeasurer = (input: MessageCardInput, sources: readonly (CardSource | null)[]) => Promise<{ readonly contentHeight: number; readonly viewportHeight: number } | null>;
+const defaultScrollMeasurer: ScrollMeasurer = async (input, sources) => (await import('@/lib/export/message-card-paint')).measureCardScroll(input, document, sources);
+
+/** La vidéo d'une carte qui défile ou posée sur une vidéo choisie (#18671, #18672). */
+type LivingRecorder = (params: {
+  readonly input: MessageCardInput;
+  readonly sources: readonly (CardSource | null)[];
+  readonly plan: ScrollPlan | null;
+  readonly durationMs: number;
+  readonly backdropVideoUrl: string | null;
+}) => Promise<Blob | null>;
+const defaultLivingRecorder: LivingRecorder = async (params) => (await import('@/lib/export/message-card-motion')).recordLivingCard(params);
 
 /* La livraison (galerie, partage, téléchargement) est un `import()` au premier
    « Enregistrer », comme pour une pièce jointe : `budgets.json › story_export`
@@ -187,6 +208,7 @@ export function messageCardInputOf(params: {
     mediaArrangement: format.mediaArrangement,
     featuredMedia: featured === -1 ? null : featured,
     audioStyle: format.audioStyle,
+    decor: format.decor,
     /* Les réponses jointes (#8734) sont des « autres » : l'anonymat de la citation les couvre. */
     ...(subject.followUps === undefined ? {} : { followUps: subject.followUps.map((follow) => part(follow, format.anonymizeQuoted, null)) }),
   };
@@ -222,6 +244,9 @@ export function MessageExportSheet({
   random = Math.random,
   loadSources = defaultSourcesLoader,
   recordMotion = defaultMotionRecorder,
+  loadBackdrop = defaultBackdropLoader,
+  measureScroll = defaultScrollMeasurer,
+  recordLiving = defaultLivingRecorder,
   content,
   subjectKey = '',
   preparing = false,
@@ -248,6 +273,12 @@ export function MessageExportSheet({
   readonly loadSources?: SourcesLoader;
   /** Le GIF ou la vidéo de la carte (#8693) — injecté par les témoins. */
   readonly recordMotion?: MotionRecorder;
+  /** Les pixels de la photo ou de la vidéo choisie en fond (#18672) — injectés par les témoins. */
+  readonly loadBackdrop?: BackdropLoader;
+  /** Les hauteurs d'une carte qui défile (#18671) — injectées par les témoins. */
+  readonly measureScroll?: ScrollMeasurer;
+  /** La vidéo d'une carte qui défile ou sur fond vidéo — injectée par les témoins. */
+  readonly recordLiving?: LivingRecorder;
   /** Les choix de composition d'un commentaire de post (#9687) — l'onglet « Contenu » du plateau, le premier (#16393). */
   readonly content?: ReactNode;
   /** Ce qui distingue une composition d'une autre : changer de composition repeint l'aperçu et ses vignettes. */
@@ -274,7 +305,6 @@ export function MessageExportSheet({
   );
   const quickSent = useRef(false);
   const [usage] = useState(() => readTemplateUsage(storage));
-  const [popular] = useState(() => popularTemplates(usage, POPULAR_COUNT));
   const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
 
   /* Les portes sont PRÉCHARGÉES pendant que la carte se peint : sur iOS, le
@@ -286,22 +316,35 @@ export function MessageExportSheet({
   }, []);
 
   const media = useCardSources(subject.media, loadSources);
+  /* Le fond CHOISI (#18672) : ses pixels suivent ceux des médias, au rang `media.length`. */
+  const chosen = useChosenBackdrop({ load: loadBackdrop, createObjectURL, revokeObjectURL });
+  const backdropVideo = chosen.backdrop?.kind === 'video';
+  const sources: readonly (CardSource | null)[] =
+    chosen.backdrop === null ? media.sources : [...subject.media.map((_, index) => media.sources[index] ?? null), chosen.backdrop.source];
+  const backdropKey = chosen.backdrop === null ? '' : `${chosen.backdrop.id}:${chosen.veil}`;
+  const [speed, setSpeed] = useState<ScrollSpeed>(STANDARD_SCROLL_SPEED);
+  const [scroll, setScroll] = useState<{ readonly key: string; readonly contentHeight: number; readonly viewportHeight: number } | null>(null);
   /* Ce que la carte PEINT (#9236) — les sorties offertes et le média qu'un export animé décode le suivent. */
   const cards = subject.media.map((item) => item.card);
   const featuredIndex = featured === null ? -1 : subject.media.findIndex((item) => item.id === featured);
   const disposition: CardMediaDisposition = { layout: format.mediaLayout, arrangement: format.mediaArrangement, featured: featuredIndex === -1 ? null : featuredIndex, hero: subject.media.findIndex((item) => item.hero === true) };
   const painted = paintedMediaIndexes(cards, disposition);
   const shownId = subject.media[paintedVisualIndexes(cards, disposition)[0] ?? -1]?.id ?? null;
-  const outputs = cardOutputsOf(painted.flatMap((index) => cards[index] ?? []));
+  const key = `${formatKey(format)}|${featured ?? ''}|${media.version}|${subjectKey}|${backdropKey}`;
+  const plan = scroll !== null && scroll.key === key ? scrollPlanOf(scroll.contentHeight, scroll.viewportHeight, speed) : null;
+  const outputs = cardOutputsOf(
+    painted.flatMap((index) => cards[index] ?? []),
+    { scrolls: plan !== null, backdropVideo },
+  );
   const [chosenOutput, setOutput] = useState<CardOutput>('image');
   const output: CardOutput = outputs.includes(chosenOutput) ? chosenOutput : 'image';
   const [motionBusy, setMotionBusy] = useState<Exclude<CardOutput, 'image'> | null>(null);
   const motionCache = useMotionCache();
 
-  const inputFor = (template: MessageCardTemplateId): MessageCardInput =>
+  const baseInputOf = (shown: MessageCardFormat): MessageCardInput =>
     messageCardInputOf({
       subject,
-      format: { ...format, template },
+      format: shown,
       handle,
       conversationTitle: title,
       anonymousLabel: translateExportCard(language, 'export.card.anonymous'),
@@ -309,14 +352,17 @@ export function MessageExportSheet({
       formatTime: (date) => new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date),
       featured,
     });
-
-  const key = `${formatKey(format)}|${featured ?? ''}|${media.version}|${subjectKey}`;
+  const inputOfFormat = (shown: MessageCardFormat): MessageCardInput => {
+    const input = baseInputOf(shown);
+    return chosen.backdrop === null ? input : { ...input, chosenBackdrop: { video: backdropVideo, veil: chosen.veil } };
+  };
+  const inputFor = (template: MessageCardTemplateId): MessageCardInput => inputOfFormat({ ...format, template });
 
   useEffect(() => {
     let live = true;
     let url: string | null = null;
     setFailed(false);
-    void paint(inputFor(format.template), media.sources)
+    void paint(inputFor(format.template), sources)
       .catch(() => null)
       .then((card) => {
         if (!live) return;
@@ -334,16 +380,44 @@ export function MessageExportSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, subject, handle, title]);
 
+  /* Trop longue pour son format, la carte peut DÉFILER en vidéo (#18671) : on mesure sa hauteur entière, une fois par carte. */
+  useEffect(() => {
+    let live = true;
+    void measureScroll(inputFor(format.template), sources)
+      .catch(() => null)
+      .then((heights) => {
+        if (live) setScroll(heights === null ? null : { key, ...heights });
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, subject, handle, title]);
+
   /* Les vignettes : un cache par feuille, rendu à la fermeture. Leur clé suit
      tout ce qui change la carte SAUF le template, qu'elle nomme elle-même. */
   const [cache] = useState(() => createThumbnailCache({ createObjectURL, revokeObjectURL }));
   useEffect(() => () => cache.dispose(), [cache]);
-  const context = `${JSON.stringify({ ...format, template: null })}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}|${subjectKey}`;
+  const context = `${JSON.stringify({ ...format, template: null })}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}|${subjectKey}|${backdropKey}`;
   const thumbs = useMemo<ThumbSource>(
-    () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, media.sources) }),
+    () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, sources) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cache, context, subject],
   );
+
+  /* Les maquettes (#18673) : chacune peinte sur le message, habillée de ce qu'elle impose ; leur clé suit ce qu'elles laissent à l'utilisateur. */
+  const neutralModel = modelById(DEFAULT_MODEL_ID);
+  const modelContext = `${JSON.stringify(neutralModel === null ? format : applyModel(neutralModel, format))}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}|${subjectKey}|${backdropKey}`;
+  const modelThumbs = useMemo(() => {
+    const byModel = new Map(
+      BUILT_IN_MODELS.map((model): [string, ThumbSource] => [
+        model.id,
+        { cache, keyOf: () => `model:${model.id}|${modelContext}`, render: () => thumbnail(inputOfFormat(applyModel(model, format)), THUMB_WIDTH, sources) },
+      ]),
+    );
+    return (model: CardModel): ThumbSource => byModel.get(model.id) ?? thumbs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cache, modelContext, subject, thumbs]);
 
   /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
   const ready = rendered !== null && rendered.key === key && !media.loading && !preparing;
@@ -353,14 +427,23 @@ export function MessageExportSheet({
   /** Le fichier à livrer : l'image peinte, ou le GIF / la vidéo fabriqués à la demande (et gardés pour un second geste). */
   const fileFor = async (card: Rendered): Promise<Blob | null> => {
     if (output === 'image') return card.blob;
-    const cacheKey = `${key}|${output}|${exportLanguage ?? ''}`;
+    const cacheKey = `${key}|${output}|${exportLanguage ?? ''}|${plan === null ? '' : speed}`;
     const cached = motionCache.get(cacheKey);
     if (cached !== undefined) return cached;
+    if (output === 'video' && (plan !== null || backdropVideo)) {
+      setMotionBusy(output);
+      announce(translateExportCard(language, 'export.card.motion.video'));
+      const durationMs = plan !== null ? plan.duration * 1000 : motionDurationOf({ output, mediaDurationMs: chosen.backdrop?.durationMs ?? null });
+      const blob = await recordLiving({ input: inputFor(format.template), sources, plan, durationMs, backdropVideoUrl: backdropVideo ? (chosen.backdrop?.url ?? null) : null }).catch(() => null);
+      setMotionBusy(null);
+      if (blob !== null) motionCache.set(cacheKey, blob);
+      return blob;
+    }
     const temporal = temporalItemOf(subject.media, painted);
     if (temporal === null) return null;
     setMotionBusy(output);
     announce(translateExportCard(language, output === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video'));
-    const blob = await recordMotion({ input: inputFor(format.template), sources: media.sources, output, item: temporal.item, index: temporal.index }).catch(() => null);
+    const blob = await recordMotion({ input: inputFor(format.template), sources, output, item: temporal.item, index: temporal.index }).catch(() => null);
     setMotionBusy(null);
     if (blob !== null) motionCache.set(cacheKey, blob);
     return blob;
@@ -392,7 +475,14 @@ export function MessageExportSheet({
 
   const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
   const choose = (choice: FrameChoice) => setFormat((current) => ({ ...current, ...choice }));
-  const pick = (template: MessageCardTemplateId) => setFormat((current) => ({ ...current, template }));
+  /* Un template hors des liaisons de la maquette l'en fait sortir : la carte n'est plus « Bulles » avec un filet. */
+  const pick = (template: MessageCardTemplateId) =>
+    setFormat((current) => {
+      const model = modelById(current.model);
+      const inModel = model !== null && offeredLinks(model).includes(templateOf(template).link);
+      return { ...current, template, model: inModel ? current.model : null };
+    });
+  const pickModel = (model: CardModel) => setFormat((current) => applyModel(model, current));
   const current = templateOf(format.template);
   const pickPart = (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
     pick(templateIdOf({ palette: part.palette ?? current.paletteId, typeface: part.typeface ?? current.typefaceId, link: part.link ?? current.link }));
@@ -440,7 +530,11 @@ export function MessageExportSheet({
           <button
             type="button"
             data-export-random=""
-            onClick={() => pick(randomTemplateId(random))}
+            onClick={() => {
+              const drawn = templateOf(randomTemplateId(random));
+              const model = modelById(format.model);
+              pick(templateIdOf({ palette: drawn.paletteId, typeface: drawn.typefaceId, link: model?.link ?? drawn.link }));
+            }}
             aria-label={translateExportCard(language, 'export.card.random')}
             title={translateExportCard(language, 'export.card.random')}
             className="grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -568,9 +662,10 @@ export function MessageExportSheet({
             featured={shownId}
             onFeatured={setFeatured}
             hasMediaAuthors={hasMediaAuthors}
-            popular={popular.includes(format.template) ? popular : [format.template, ...popular]}
-            thumbs={thumbs}
-            onTemplate={pick}
+            models={BUILT_IN_MODELS}
+            modelThumbs={modelThumbs}
+            onModel={pickModel}
+            links={linksOf(format.model)}
             onPart={pickPart}
             onToggle={toggle}
             onChoice={choose}
@@ -579,10 +674,22 @@ export function MessageExportSheet({
             exportLanguage={exportLanguage}
             onLanguage={setExportLanguage}
             {...(content === undefined ? {} : { content })}
+            backdrop={
+              <BackdropRow
+                language={language}
+                chosen={chosen.backdrop !== null}
+                failed={chosen.failed}
+                veil={chosen.veil}
+                onPick={chosen.pick}
+                onRemove={chosen.remove}
+                onVeil={chosen.setVeil}
+              />
+            }
           />
         </div>
 
         <OutputPicker language={language} outputs={outputs} output={output} onOutput={setOutput} />
+        {output === 'video' && plan !== null ? <ScrollRow language={language} speed={speed} durationS={plan.duration} onSpeed={setSpeed} /> : null}
 
         <div className="relative grid shrink-0 grid-cols-2 gap-2 px-3 pb-3 pt-2">
           <button

@@ -21,6 +21,7 @@ const STEP_NAMES = [
   'ensurePostGeoIndex',
   'ensureFriendRequestIndexes',
   'ensureContactDeltaIndex',
+  'ensureMessageDedupIndexes',
   'initializeDatabase',
   'ensureSeedAccountsVerified',
   'ensureWorldConversation',
@@ -51,12 +52,37 @@ describe('bootstrapDatabase — ce qui vit hors de la porte du seed (#6581)', ()
 
     await bootstrapDatabase(steps);
 
-    expect(order.slice(0, 4)).toEqual([
+    // Tous les invariants de SCHÉMA, puis la porte. L'assertion porte sur la
+    // tranche ENTIÈRE qui précède `shouldInitialize` : un invariant ajouté
+    // derrière la porte par distraction se verrait ici, pas seulement le
+    // quatrième de la liste.
+    expect(order.slice(0, order.indexOf('shouldInitialize') + 1)).toEqual([
       'ensurePostGeoIndex',
       'ensureFriendRequestIndexes',
       'ensureContactDeltaIndex',
+      'ensureMessageDedupIndexes',
       'shouldInitialize',
     ]);
+  });
+
+  /**
+   * #18621 — l'index unique PARTIEL `(conversationId, clientMessageId)` est la
+   * SEULE chose qui ferme la fenêtre de concurrence du dedup d'envoi. Il était
+   * posé à la main par une migration qu'aucun déploiement ne joue, et il a déjà
+   * manqué DEUX MOIS en production sans que rien ne le détecte.
+   *
+   * Sa place est du même côté de la porte que ses trois voisins, et pour la
+   * raison que ce fichier existe : un invariant derrière `shouldInitialize()`
+   * ne s'applique JAMAIS à une base peuplée — c'est-à-dire exactement à celle
+   * qui porte les messages qu'il doit protéger.
+   */
+  it('pose l’index de dedup d’envoi AVANT la porte — une base peuplée est celle qui en a besoin (#18621)', async () => {
+    const { steps, order } = makeSteps(false);
+
+    await bootstrapDatabase(steps);
+
+    expect(order.indexOf('ensureMessageDedupIndexes')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('ensureMessageDedupIndexes')).toBeLessThan(order.indexOf('shouldInitialize'));
   });
 
   it('vérifie les comptes semés APRÈS l’ensemencement — la base fraîche passe par le même site que la base héritée', async () => {

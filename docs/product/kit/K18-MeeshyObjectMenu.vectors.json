@@ -37,7 +37,7 @@
     {
       "case": "les titres vides et les doublons sont retirés, un titre vide ne masque pas un identifiant",
       "items": [["a", "", "normal"], ["b", "B", "normal"], ["c", "   ", "normal"], ["a", "A", "normal"], ["b", "B bis", "normal"], ["d", "D", "destructive"], ["e", "E", "normal"]],
-      "ids": ["a", "b", "e", "d"]
+      "ids": ["b", "a", "e", "d"]
     },
     {
       "case": "deux destructives gardent leur ordre relatif, derrière les normales",

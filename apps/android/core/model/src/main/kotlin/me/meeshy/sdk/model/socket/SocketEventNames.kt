@@ -104,6 +104,9 @@ object SocketEventNames {
     const val COMMENT_UNLIKED = "comment:unliked"
     const val COMMENT_UPDATED = "comment:updated"
 
+    // community
+    const val COMMUNITY_UPDATED = "community:updated"
+
     // conversation
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
@@ -372,6 +375,7 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_UPDATED,
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,

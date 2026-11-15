@@ -49,6 +49,7 @@ import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } fr
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
+import { offlineSignedPayload } from '../offlineSignedPayload';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
@@ -1425,6 +1426,24 @@ export class MessageHandler {
       // ne connaît que la `room`. Le `messageId` ne vit qu'ici.
       const onLiveEmissionError = (error: unknown, audience: string) =>
         handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
+      // #18619 — le plan est HISSÉ hors de l'appel d'émission : les deux canaux
+      // de ce message en dépendent, et le laisser en argument faisait que seul
+      // le direct l'interrogeait. L'enfilement durable, lui, remettait l'adresse
+      // NUE d'une pièce liée au lecteur — y compris dans le cas exact où le
+      // direct décide délibérément de ne rien émettre.
+      const readerPlan = await readerSignedPlanBestEffort(
+        this.prisma,
+        { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+      );
+      // La charge de CE lecteur avant signature : masquages de transfert et
+      // scellement d'une citation d'éphémère échu d'abord, signature ensuite.
+      // L'ordre inverse signerait ce que le lecteur n'a pas le droit de voir.
+      const offlineSigned = offlineSignedPayload({
+        plan: readerPlan,
+        base: (key) => (hiddenKeys.has(key) ? payloadForKey(key) : peerPayload) as Record<string, unknown>,
+        basePerReader: hiddenKeys.size > 0,
+      });
       emitMessageNewBestEffort({
         io: this.io,
         room,
@@ -1438,11 +1457,7 @@ export class MessageHandler {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
           : null,
-        readerSigned: await readerSignedPlanBestEffort(
-          this.prisma,
-          { conversationId: normalizedId, message, attachments: peerPayload.attachments },
-          (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
-        ),
+        readerSigned: readerPlan,
       }, onLiveEmissionError);
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -1473,7 +1488,12 @@ export class MessageHandler {
       // SA requête, qui ne demande que `{id, userId}`. C'est précisément ce que
       // la requête SUPERSET tombée ci-dessus lui aurait interdit en lui passant
       // une liste VIDE.
-      await enqueueForOfflineParticipants(
+      // #18619 — `PLAN_UNAVAILABLE` gouverne les DEUX canaux. Ne pas savoir
+      // adresser une pièce peut-être protégée n'autorise pas à l'écrire en
+      // clair dans Redis pour 48 h : ce qu'on perd est une REMISE que la
+      // relecture du fil sert de toute façon, sous les mêmes lois et avec des
+      // adresses signées pour ce lecteur.
+      if (offlineSigned.kind !== 'withhold') await enqueueForOfflineParticipants(
         { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
         {
           conversationId: normalizedId,
@@ -1490,7 +1510,9 @@ export class MessageHandler {
           // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
           // retrait par LECTEUR, que seule la boucle par participant peut
           // faire.
-          ...(hiddenKeys.size > 0 ? { resolvePayloadForReader: payloadForKey } : {}),
+          // UN seul hook par lecteur : la décision a déjà composé le masquage
+          // et la signature, dans l'ordre qui les rend justes.
+          ...(offlineSigned.kind === 'per-reader' ? { resolvePayloadForReader: offlineSigned.resolve } : {}),
           participants: sharedParticipants,
         }
       );
