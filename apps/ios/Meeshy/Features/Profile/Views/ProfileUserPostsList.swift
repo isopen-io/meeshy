@@ -183,8 +183,15 @@ struct ProfileUserPostsList: View {
     /// Opens a reel in the immersive viewer. Param = tapped reel + the user's
     /// reels (seed). When `nil`, reels fall back to `onOpenPost` (detail).
     var onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil
+    /// La sortie de la feuille qui porte la liste ; `nil` ⇒ son `dismiss`.
+    var leavingHost: (() -> Void)? = nil
 
     @StateObject private var viewModel: ProfileUserPostsViewModel
+    /// Ce qui s'ouvre une fois la feuille de profil partie (#18590).
+    @State private var departure = ProfileSheetDeparture()
+    @Environment(\.routerCommands) private var router
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var shareableLink: ShareableLink?
     /// Poste (ou réel) en édition via le menu « … » — parité avec `FeedView`.
     @State private var editingPost: FeedPost?
@@ -205,11 +212,13 @@ struct ProfileUserPostsList: View {
     init(
         userId: String,
         onOpenPost: ((FeedPost) -> Void)? = nil,
-        onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil
+        onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil,
+        leavingHost: (() -> Void)? = nil
     ) {
         self.userId = userId
         self.onOpenPost = onOpenPost
         self.onOpenReel = onOpenReel
+        self.leavingHost = leavingHost
         _viewModel = StateObject(wrappedValue: ProfileUserPostsViewModel(userId: userId))
     }
 
@@ -284,7 +293,7 @@ struct ProfileUserPostsList: View {
         // annulait le minuteur de groupement et postait un lot d'un seul id —
         // une requête réseau par carte défilée, soit exactement l'inverse du
         // batching que `ImpressionBatcher` existe pour faire.
-        .onDisappear { Task { await viewModel.flushImpressions() } }
+        .onDisappear(perform: listDidLeave)
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: link.activityItems)
                 .presentationDetents([.medium, .large])
@@ -341,9 +350,9 @@ struct ProfileUserPostsList: View {
             onQuote: quote(post),
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
-            // We are already inside this user's profile sheet — tapping the
-            // (reposted) author is a no-op here to avoid stacking sheets.
-            onTapAuthor: { _ in },
+            // L'auteur d'un réel republié ouvre SA fiche à la place de celle-ci ;
+            // l'auteur de la liste n'ouvre rien, sa fiche est déjà là.
+            onTapAuthor: { authorId in openAuthor(authorId, of: post) },
             onEdit: isOwnPost ? { post in editingPost = post } : nil,
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
@@ -397,8 +406,12 @@ struct ProfileUserPostsList: View {
         return { [viewModel] id in Task { await viewModel.toggleComments(id) } }
     }
 
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private func selectFilter(_ tapped: ProfilePostsFilter) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
             viewModel.filter = viewModel.filter.toggled(with: tapped)
         }
     }
@@ -417,8 +430,29 @@ struct ProfileUserPostsList: View {
     /// (`ReelsViewModel.recordView`) envoient chacun la vue de leur ouverture.
     /// La liste du profil n'en envoie aucune — elle doublait la vue de la
     /// destination, et sa fenêtre d'une heure taisait les réouvertures.
+    ///
+    /// Sans porte d'hôte, la liste ouvre elle-même, une fois sa feuille partie :
+    /// le post par le Router, le réel dans le lecteur immersif.
     private var opening: ProfilePostOpening {
-        ProfilePostOpening(onOpenPost: onOpenPost, onOpenReel: onOpenReel)
+        ProfilePostOpening(onOpenPost: onOpenPost ?? openPostAfterLeaving, onOpenReel: onOpenReel ?? openReelAfterLeaving)
+    }
+
+    private func openPostAfterLeaving(_ post: FeedPost) {
+        let router = router
+        departure.leave(dismissing: dismissHost) { router.push(.postDetail(post.id, post)) }
+    }
+
+    private func openReelAfterLeaving(_ reel: FeedPost, in reels: [FeedPost]) {
+        departure.leave(dismissing: dismissHost) {
+            HapticFeedback.medium()
+            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
+        }
+    }
+
+    private func openAuthor(_ authorId: String, of post: FeedPost) {
+        guard let author = ProfileAuthorTap.profile(of: authorId, in: post, listedUserId: userId) else { return }
+        let router = router
+        departure.leave(dismissing: dismissHost) { router.openProfileSheet(author) }
     }
 
     private func openPost(_ post: FeedPost) {
@@ -438,20 +472,26 @@ struct ProfileUserPostsList: View {
     /// stories en cours et passées (`MyStoriesView`, hébergée par la RACINE —
     /// RootView / iPadRootView écoutent `openMyStories`, donc la tuile marche
     /// quel que soit l'écran qui a présenté la feuille de profil). La feuille
-    /// de profil est fermée d'abord — le même motif différé que
-    /// `ProfilePostsOpener` (une sheet présentée par-dessus une sheet en cours
-    /// de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la tuile
-    /// reste informative (ses stories passées ne nous sont pas accessibles).
+    /// de profil part d'abord, et la page s'ouvre à son départ
+    /// (`ProfileSheetDeparture` : une sheet présentée par-dessus une sheet en
+    /// cours de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la
+    /// tuile reste informative (ses stories passées ne nous sont pas accessibles).
     private func openStories() {
         guard opensMyStories else { return }
-        dismissHost()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        departure.leave(dismissing: dismissHost) {
             NotificationCenter.default.post(name: .openMyStories, object: nil)
         }
     }
 
+    /// La feuille partie : ce qui attendait s'ouvre, et les impressions partent en un lot.
+    private func listDidLeave() {
+        departure.sheetDidLeave()
+        Task { await viewModel.flushImpressions() }
+    }
+
     private func dismissHost() {
-        dismiss()
+        guard let leavingHost else { return dismiss() }
+        leavingHost()
     }
 
     // MARK: - Share

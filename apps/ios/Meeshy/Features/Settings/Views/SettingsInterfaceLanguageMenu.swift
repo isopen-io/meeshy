@@ -30,6 +30,7 @@ struct SettingsInterfaceLanguageMenu: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
             }
+            .meeshyTapTarget()
         }
         .accessibilityLabel(String(localized: "settings.interface_language", defaultValue: "Langue de l'interface", bundle: .main))
         .accessibilityValue(currentLabel)

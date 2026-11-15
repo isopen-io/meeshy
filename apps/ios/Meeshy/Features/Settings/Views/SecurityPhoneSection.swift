@@ -5,8 +5,14 @@ import MeeshyUI
 struct SecurityPhoneSection: View {
     let user: MeeshyUser?
     @ObservedObject var phoneFlow: PhoneChangeFlowModel
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -31,10 +37,14 @@ struct SecurityPhoneSection: View {
                         .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.bottom, MeeshySpacing.smPlus)
+                        .transition(.opacity)
                 }
             }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: phoneFlow.error)
             .background(SettingsSectionBackground(tint: MeeshyColors.indigo400Hex))
         }
+        .onAppear { phoneFlow.reducesMotion = reduceMotion }
+        .adaptiveOnChange(of: reduceMotion) { _, reduce in phoneFlow.reducesMotion = reduce }
     }
 
     private var currentPhoneRow: some View {
