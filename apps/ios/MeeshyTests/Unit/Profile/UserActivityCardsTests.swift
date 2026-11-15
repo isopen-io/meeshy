@@ -209,14 +209,23 @@ final class UserActivityCardsTests: XCTestCase {
     }
 
     private static func tinted(_ tint: String, opacity: Double, over background: String) -> String {
-        zip(channels(tint), channels(background))
-            .map { String(format: "%02X", Int((($0 * opacity + $1 * (1 - opacity)) * 255).rounded())) }
-            .joined()
+        let pairs: [(Double, Double)] = Array(zip(channels(tint), channels(background)))
+        let blended: [String] = pairs.map { (front: Double, back: Double) -> String in
+            let mixed: Double = front * opacity + back * (1 - opacity)
+            return String(format: "%02X", Int((mixed * 255).rounded()))
+        }
+        return blended.joined()
     }
 
     private static func luminance(_ hex: String) -> Double {
-        let linear = channels(hex).map { $0 <= 0.03928 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
-        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+        let linear: [Double] = channels(hex).map { (channel: Double) -> Double in
+            if channel <= 0.03928 { return channel / 12.92 }
+            return pow((channel + 0.055) / 1.055, 2.4)
+        }
+        let red: Double = 0.2126 * linear[0]
+        let green: Double = 0.7152 * linear[1]
+        let blue: Double = 0.0722 * linear[2]
+        return red + green + blue
     }
 
     private static func contrast(_ first: String, _ second: String) -> Double {
