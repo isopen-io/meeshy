@@ -193,6 +193,15 @@ import type {
   NowPlayingClearedEventData,
   NowPlayingUpdatePayload,
 } from '../now-playing.js';
+import type {
+  BatteryChangedEventData,
+  BatteryClearedEventData,
+  BatteryPullAck,
+  BatteryPullPayload,
+  BatteryPullRequestedEventData,
+  BatteryReport,
+  BatteryReportAck,
+} from '../battery.js';
 import type { BloodProximityEventData } from '../blood-location.js';
 import type {
   SharedLocationAck,
@@ -386,6 +395,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.TALKIE_ENDED]: (data: TalkieEndedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CHANGED]: (data: NowPlayingChangedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
+  [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
+  [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
+  [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
@@ -566,6 +578,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TALKIE_JOIN]: (data: TalkieJoinPayload) => void;
   [CLIENT_EVENTS.NOW_PLAYING_UPDATE]: (data: NowPlayingUpdatePayload, callback?: (response: NowPlayingAck) => void) => void;
   [CLIENT_EVENTS.NOW_PLAYING_CLEAR]: (data: Record<string, never>, callback?: (response: NowPlayingClearAck) => void) => void;
+  [CLIENT_EVENTS.BATTERY_REPORT]: (data: BatteryReport, callback?: (response: BatteryReportAck) => void) => void;
+  [CLIENT_EVENTS.BATTERY_PULL]: (data: BatteryPullPayload, callback?: (response: BatteryPullAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_START]: (data: SharedLocationStartPayload, callback?: (response: SharedLocationAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_UPDATE]: (data: SharedLocationUpdatePayload, callback?: (response: SharedLocationAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_STOP]: (data: Record<string, never>, callback?: (response: SharedLocationStopAck) => void) => void;

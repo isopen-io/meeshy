@@ -24,6 +24,13 @@ from pathlib import Path
 from datetime import datetime
 from enum import Enum
 
+from utils.voice_cache_guard import (
+    INVALID_USER_ID_DETAIL,
+    VoiceCacheIdRejected,
+    guard_voice_cache_id,
+    voice_cache_user_dir,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -229,8 +236,14 @@ def create_voice_api_router(
     def get_user_id(authorization: Optional[str] = None) -> str:
         if authorization and authorization.startswith("Bearer "):
             # Dans un vrai système, décoder le JWT
-            return "user_" + authorization[-8:]
+            return _admitted_user_id("user_" + authorization[-8:])
         return "anonymous_" + uuid.uuid4().hex[:8]
+
+    def _admitted_user_id(raw: str) -> str:
+        try:
+            return guard_voice_cache_id(raw)
+        except VoiceCacheIdRejected:
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_DETAIL) from None
 
     # ═══════════════════════════════════════════════════════════════════════
     # VOICE TRANSLATION
@@ -565,7 +578,10 @@ def create_voice_api_router(
 
         # Supprimer le répertoire du cache
         import shutil
-        user_dir = voice_clone_service.voice_cache_dir / user_id
+        try:
+            user_dir = voice_cache_user_dir(voice_clone_service.voice_cache_dir, user_id)
+        except VoiceCacheIdRejected:
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_DETAIL) from None
         if user_dir.exists():
             shutil.rmtree(user_dir)
 

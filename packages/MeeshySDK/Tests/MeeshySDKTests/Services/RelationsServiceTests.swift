@@ -104,6 +104,47 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(api.lastRequest?.queryItems, [URLQueryItem(name: "bbox", value: "2.0,48.0,3.0,49.0")])
     }
 
+    func test_ownSharedLocation_readsWhoTheGatewayServesMyPositionTo_andSkipsUnreadablePeople() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations/mine", json: """
+        {"success":true,"data":{"recipients":[
+          {"userId":"aaaaaaaaaaaaaaaaaaaaaaaa","precision":"exact","expiresAt":"2026-11-15T11:00:00.000Z"},
+          {"userId":"bbbbbbbbbbbbbbbbbbbbbbbb","precision":"street","expiresAt":"2026-11-15T12:00:00.000Z"},
+          {"userId":"cccccccccccccccccccccccc","precision":"city","expiresAt":"demain"}
+        ],"expiresAt":"2026-11-15T12:00:00.000Z"}}
+        """)
+
+        let own = try await service.ownSharedLocation()
+
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/locations/mine")
+        XCTAssertEqual(api.lastRequest?.method, "GET")
+        XCTAssertEqual(own.recipients.map(\.userId), ["aaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbb"])
+        XCTAssertEqual(own.recipients.map(\.precision), [.exact, .city])
+    }
+
+    func test_ownSharedLocation_nothingShared_isAnEmptyList() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations/mine", json: #"{"success":true,"data":{"recipients":[],"expiresAt":null}}"#)
+
+        let own = try await service.ownSharedLocation()
+
+        XCTAssertTrue(own.recipients.isEmpty)
+    }
+
+    /// Une réponse sans liste lisible est « je ne sais pas », jamais « plus rien n'est partagé » : l'appareil qui
+    /// l'adopterait perdrait ses « Arrêter » pendant que la passerelle sert encore sa position.
+    func test_ownSharedLocation_withoutAReadableList_fails() async {
+        for body in [#"{"success":true,"data":{}}"#, #"{"success":true,"data":{"recipients":"tous"}}"#] {
+            let (service, api) = makeSUT()
+            api.stubWire("/relations/locations/mine", json: body)
+
+            do {
+                _ = try await service.ownSharedLocation()
+                XCTFail("une liste illisible ne doit pas se lire comme vide : \(body)")
+            } catch {}
+        }
+    }
+
     // MARK: - Baisser (#14910)
 
     func test_lower_postsTheTargetLevelAndReadsTheServedLink() async throws {

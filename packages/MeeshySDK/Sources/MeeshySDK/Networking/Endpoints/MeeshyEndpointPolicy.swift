@@ -130,9 +130,12 @@ public extension RelationsEndpoint {
     /// déclaration le transport ne rend qu'une phrase (`MeeshyError.server(409, _)`) et un
     /// lâcher se confondrait avec une panne. Les deux lectures (`GET /relations`,
     /// `GET /relations/config`) gardent la forme d'erreur qu'elles ont.
+    ///
+    /// Le relevé à la demande de la batterie (#14147) lit son code : `BATTERY_PULL_TOO_SOON` dit « déjà demandé il y a
+    /// moins de 5 minutes », `BATTERY_PULL_FORBIDDEN` retire le bouton.
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .byUserIdRitual, .byUserIdLevel: return .structured
+        case .byUserIdRitual, .byUserIdLevel, .byUserIdBatteryPull: return .structured
         default: return .opaque
         }
     }

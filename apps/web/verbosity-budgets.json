@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 96,
+      "total": 100,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -625,6 +625,18 @@
       },
       "motif": "Le bloc « Chiffrement de bout en bout » dit ce qu'il est (choisi par conversation, irréversible) avant de mener aux appareils",
       "issue": 17584
+    },
+    "me": {
+      "de": {
+        "total": 96,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 100,
+        "firstScreen": 37
+      },
+      "motif": "La coupure globale du partage de batterie (« Batterie », « Partager ma batterie ») ; qui la voit et ce que le navigateur n'envoie pas restent derrière le (i)",
+      "issue": 14147
     }
   }
 }
