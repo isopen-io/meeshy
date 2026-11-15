@@ -39,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -145,12 +146,17 @@ public fun MeeshyAnchoredSheet(
     val reduceMotion = LocalReduceMotion.current
     val motion = remember(reduceMotion) { MeeshyAnchoredSheetMetrics.motion(reduceMotion) }
     val currentDismiss = rememberUpdatedState(onDismissRequest)
+    val isActive = !LocalMeeshyAnchoredSheetLeaving.current
+    val currentActive = rememberUpdatedState(isActive)
+    val dismiss: () -> Unit = remember { { if (currentActive.value) currentDismiss.value() } }
     val owner = remember { Any() }
 
     SideEffect {
-        state.densityPx = density
-        state.isPullEnabled = isDragDismissEnabled
-        state.onPullDismiss = { currentDismiss.value() }
+        if (isActive) {
+            state.densityPx = density
+            state.isPullEnabled = isDragDismissEnabled
+            state.onPullDismiss = dismiss
+        }
     }
     remember(height) {
         if (height is MeeshyAnchoredSheetHeight.Detents) {
@@ -160,7 +166,8 @@ public fun MeeshyAnchoredSheet(
     }
     DisposableEffect(state, owner) { onDispose { state.release(owner) } }
 
-    BoxWithConstraints(modifier.fillMaxSize().semantics { isTraversalGroup = true }) {
+    val announced = if (isActive) Modifier.semantics { isTraversalGroup = true } else Modifier.clearAndSetSemantics {}
+    BoxWithConstraints(modifier.fillMaxSize().then(announced)) {
         val availableDp = maxHeight.value
         var contentDp by remember { mutableStateOf<Float?>(null) }
         val layout = remember(height, contentDp, availableDp, maximumFraction, state.detentIndex) {
@@ -181,11 +188,11 @@ public fun MeeshyAnchoredSheet(
 
         val isPublishable = height != MeeshyAnchoredSheetHeight.Content || contentDp != null
         val restPx = layout.rest * density
-        LaunchedEffect(restPx, isPublishable) { if (isPublishable) state.publish(owner, restPx) }
+        LaunchedEffect(restPx, isPublishable, isActive) { if (isPublishable && isActive) state.publish(owner, restPx) }
 
         if (chrome.isModal) {
-            BackHandler(onBack = { currentDismiss.value() })
-            OutsideLayer(showsScrim = chrome.showsScrim, onDismiss = { currentDismiss.value() })
+            BackHandler(enabled = isActive, onBack = dismiss)
+            OutsideLayer(showsScrim = chrome.showsScrim, isActive = isActive, onDismiss = dismiss)
         }
         Sheet(
             layout = layout,
@@ -201,7 +208,7 @@ public fun MeeshyAnchoredSheet(
             isDragDismissEnabled = isDragDismissEnabled,
             motion = motion,
             density = density,
-            onDismiss = { currentDismiss.value() },
+            onDismiss = dismiss,
             onContentHeight = { contentDp = it },
             trailing = trailing,
             content = content,
@@ -209,14 +216,22 @@ public fun MeeshyAnchoredSheet(
     }
 }
 
-/** Hors de la feuille : un bouton nommé qui la ferme, voilé si l'hôte le demande. Lu après la feuille par TalkBack. */
+/**
+ * Hors de la feuille : un bouton nommé qui la ferme, voilé si l'hôte le demande. Lu après la feuille par TalkBack. Une
+ * feuille qui SORT garde son voile jusqu'au bout de sa sortie, mais ne prend plus aucun toucher : l'hôte le reçoit.
+ */
 @Composable
-private fun OutsideLayer(showsScrim: Boolean, onDismiss: () -> Unit) {
+private fun OutsideLayer(showsScrim: Boolean, isActive: Boolean, onDismiss: () -> Unit) {
+    val veil = if (showsScrim) Modifier.background(MeeshyMediaChromeColors.MediaBackdrop.copy(alpha = MeeshyAnchoredSheetMetrics.SCRIM_OPACITY)) else Modifier
+    if (!isActive) {
+        if (showsScrim) Box(Modifier.fillMaxSize().then(veil))
+        return
+    }
     val label = stringResource(R.string.kit_anchored_sheet_dismiss)
     Box(
         Modifier
             .fillMaxSize()
-            .then(if (showsScrim) Modifier.background(MeeshyMediaChromeColors.MediaBackdrop.copy(alpha = MeeshyAnchoredSheetMetrics.SCRIM_OPACITY)) else Modifier)
+            .then(veil)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -528,3 +543,10 @@ internal object MeeshyAnchoredSheetTags {
 private val SheetShape = RoundedCornerShape(topStart = MeeshyRadius.xxl, topEnd = MeeshyRadius.xxl)
 
 private const val OUTSIDE_TRAVERSAL_INDEX = 1f
+
+/**
+ * Vrai pour la feuille que son hôte a refermée ou remplacée et qui joue sa sortie : elle ne ferme plus rien (✕, glissé,
+ * retour, Échap, toucher hors feuille), ne publie plus sa place et sort de l'arbre du lecteur d'écran. Rouverte avant la
+ * fin de sa sortie, elle redevient active et republie sa place. Posé par [MeeshyAnchoredSheetHost].
+ */
+internal val LocalMeeshyAnchoredSheetLeaving = compositionLocalOf { false }

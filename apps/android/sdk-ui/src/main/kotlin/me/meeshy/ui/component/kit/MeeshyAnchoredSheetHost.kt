@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -79,23 +80,25 @@ public fun <T : Any> MeeshyAnchoredSheetHost(
     ) { item ->
         if (item != null) {
             val slot: (@Composable () -> Unit)? = if (trailing != null) ({ trailing(item) }) else null
-            MeeshyAnchoredSheet(
-                onDismissRequest = onDismissRequest,
-                title = title,
-                accessibilityLabel = accessibilityLabel,
-                height = height,
-                maximumFraction = maximumFraction,
-                showsHandle = showsHandle,
-                isDragDismissEnabled = isDragDismissEnabled,
-                closeLabel = closeLabel,
-                surface = surface,
-                outside = outside,
-                scrim = scrim,
-                maxWidth = maxWidth,
-                state = state,
-                trailing = slot,
-                content = { content(item) },
-            )
+            CompositionLocalProvider(LocalMeeshyAnchoredSheetLeaving provides (item != open)) {
+                MeeshyAnchoredSheet(
+                    onDismissRequest = onDismissRequest,
+                    title = title,
+                    accessibilityLabel = accessibilityLabel,
+                    height = height,
+                    maximumFraction = maximumFraction,
+                    showsHandle = showsHandle,
+                    isDragDismissEnabled = isDragDismissEnabled,
+                    closeLabel = closeLabel,
+                    surface = surface,
+                    outside = outside,
+                    scrim = scrim,
+                    maxWidth = maxWidth,
+                    state = state,
+                    trailing = slot,
+                    content = { content(item) },
+                )
+            }
         }
     }
 }

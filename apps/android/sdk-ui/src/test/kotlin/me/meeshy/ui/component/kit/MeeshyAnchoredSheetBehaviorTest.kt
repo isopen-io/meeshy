@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -289,6 +291,73 @@ class MeeshyAnchoredSheetBehaviorTest {
     }
 
     @Test
+    fun `rouverte pendant sa sortie, la feuille republie sa place`() {
+        lateinit var state: MeeshyAnchoredSheetState
+        var open by mutableStateOf<String?>("a")
+        show(reduceMotion = false) {
+            state = rememberMeeshyAnchoredSheetState()
+            MeeshyAnchoredSheetHost(open = open, onDismissRequest = {}, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular, state = state) { Rows() }
+        }
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = null }
+        compose.mainClock.advanceTimeBy(EXIT_WINDOW_MILLIS)
+        assertThat(state.footprintPx).isEqualTo(0f)
+
+        compose.runOnIdle { open = "a" }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
+    }
+
+    @Test
+    fun `une feuille qui sort ne prend plus ni le retour ni le toucher hors feuille`() {
+        var dismissed = 0
+        var hostBacks = 0
+        var open by mutableStateOf<String?>("a")
+        show(reduceMotion = false) {
+            BackHandler { hostBacks++ }
+            MeeshyAnchoredSheetHost(open = open, onDismissRequest = { dismissed++ }, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular) { Rows() }
+        }
+        compose.onNodeWithContentDescription(OUTSIDE).assertExists()
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = null }
+        compose.mainClock.advanceTimeBy(EXIT_WINDOW_MILLIS)
+
+        compose.onNodeWithContentDescription(OUTSIDE).assertDoesNotExist()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        assertThat(dismissed).isEqualTo(0)
+        assertThat(hostBacks).isEqualTo(1)
+    }
+
+    @Test
+    fun `la place publiee ne suit pas le doigt - la feuille, si`() {
+        lateinit var state: MeeshyAnchoredSheetState
+        show {
+            state = rememberMeeshyAnchoredSheetState()
+            MeeshyAnchoredSheet(onDismissRequest = {}, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular, state = state) { Rows() }
+        }
+        val restTop = compose.onNodeWithTag(MeeshyAnchoredSheetTags.SHEET).getUnclippedBoundsInRoot().top.value
+
+        compose.onNodeWithTag(MeeshyAnchoredSheetTags.HEADER).performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 40f))
+            moveBy(Offset(0f, 40f))
+        }
+        compose.waitForIdle()
+
+        assertThat(compose.onNodeWithTag(MeeshyAnchoredSheetTags.SHEET).getUnclippedBoundsInRoot().top.value).isGreaterThan(restTop + 30f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
+        compose.onNodeWithTag(MeeshyAnchoredSheetTags.HEADER).performTouchInput { up() }
+    }
+
+    @Test
     fun `la place d'une feuille systeme se publie sans rien dessiner`() {
         lateinit var state: MeeshyAnchoredSheetState
         show {
@@ -355,5 +424,6 @@ class MeeshyAnchoredSheetBehaviorTest {
     private companion object {
         const val ROWS = "rows"
         const val OUTSIDE = "Close the sheet"
+        const val EXIT_WINDOW_MILLIS = 48L
     }
 }
