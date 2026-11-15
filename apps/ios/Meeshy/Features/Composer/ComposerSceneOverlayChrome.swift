@@ -58,6 +58,7 @@ struct ComposerSceneOverlayChrome: View {
                     // Un niveau posé par-dessus remplace celui du dessous : même
                     // place, un seul mouvement.
                     selection
+                        .padding(.trailing, -ComposerSelectionColumn.glyphInset)
                         .id(ComposerEditRailStack.levelKey(selection.level))
                         .transition(ComposerSelectionChrome.levelTransition(reduceMotion: reduceMotion))
                 }

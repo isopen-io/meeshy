@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -11,6 +11,7 @@ import { knownPersonByIdInConversations } from '@/lib/profile/known-people-cache
 import { togetherStore, type TogetherInvitation, type TogetherSession, type TogetherStoreApi } from '@/lib/together/together-live';
 import { useTogetherClient } from '@/lib/together/use-together-client';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { TogetherPlayerView, type TogetherSource } from './together-player';
 
@@ -28,6 +29,8 @@ import { TogetherPlayerView, type TogetherSource } from './together-player';
  *   « Quelqu'un », jamais inventées.
  */
 
+const JOIN_FAILURE = { offline: 'together.join.offline', failed: 'together.join.failed' } as const;
+
 const nameOf = (language: InterfaceLanguage, userId: string): string => {
   const known = knownPersonByIdInConversations(appQueryClient, userId);
   return known?.displayName ?? known?.username ?? translateCircles(language, 'together.someone');
@@ -39,12 +42,18 @@ export function TogetherInvitationView({
   name,
   onJoin,
   onDecline,
+  joining = false,
+  error = null,
+  leaving = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly invitation: Pick<TogetherInvitation, 'sessionId' | 'media'>;
   readonly name: string;
   readonly onJoin: () => void;
   readonly onDecline: () => void;
+  readonly joining?: boolean;
+  readonly error?: string | null;
+  readonly leaving?: boolean;
 }) {
   const title = translateCircles(language, invitation.media === 'video' ? 'together.invite.video' : 'together.invite.audio', { name });
   return (
@@ -53,7 +62,7 @@ export function TogetherInvitationView({
       aria-label={title}
       data-together-invitation={invitation.sessionId}
       className="fixed inset-x-0 top-0 z-[80] flex justify-center px-4"
-      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', pointerEvents: 'none' }}
+      {...layerMotion(leaving, { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', pointerEvents: 'none', '--layer-shift': '0 -8px' } as CSSProperties)}
     >
       <div
         className="grid max-w-md gap-2 rounded-card px-4 py-3 shadow-lg"
@@ -63,12 +72,17 @@ export function TogetherInvitationView({
           <span aria-hidden="true">{invitation.media === 'video' ? '🎬 ' : '🎧 '}</span>
           {title}
         </p>
+        {error === null ? null : (
+          <p role="alert" data-together-join-error="" className="text-caption font-semibold">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <button
             type="button"
             data-together-decline=""
             onClick={onDecline}
-            className="rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, border: '1.5px solid var(--color-on-state)', outlineColor: 'var(--color-on-state)' }}
           >
             {translateCircles(language, 'together.decline')}
@@ -78,7 +92,9 @@ export function TogetherInvitationView({
             data-together-join=""
             aria-label={translateCircles(language, 'together.join.a11y', { name })}
             onClick={onJoin}
-            className="rounded-full px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+            disabled={joining}
+            aria-busy={joining}
+            className="btn-press rounded-full px-4 disabled:opacity-60 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, backgroundColor: 'var(--color-on-state)', color: 'var(--color-brand)', outlineColor: 'var(--color-on-state)' }}
           >
             {translateCircles(language, 'together.join')}
@@ -89,9 +105,23 @@ export function TogetherInvitationView({
   );
 }
 
-export function TogetherWaitingView({ language, name, onCancel }: { readonly language: InterfaceLanguage; readonly name: string; readonly onCancel: () => void }) {
+export function TogetherWaitingView({
+  language,
+  name,
+  onCancel,
+  leaving = false,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly name: string;
+  readonly onCancel: () => void;
+  readonly leaving?: boolean;
+}) {
   return (
-    <div data-together-waiting="" className="fixed inset-x-0 bottom-0 z-[80] flex justify-center px-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', pointerEvents: 'none' }}>
+    <div
+      data-together-waiting=""
+      className="fixed inset-x-0 bottom-0 z-[80] flex justify-center px-4"
+      {...layerMotion(leaving, { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', pointerEvents: 'none', '--layer-shift': '0 8px' } as CSSProperties)}
+    >
       <div className="flex items-center gap-3 rounded-full py-1 pl-4 pr-1 shadow-lg" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: '1px solid var(--color-edge)', pointerEvents: 'auto' }}>
         <span role="status" aria-live="polite" className="text-body">
           {translateCircles(language, 'together.waiting', { name })}
@@ -100,7 +130,7 @@ export function TogetherWaitingView({ language, name, onCancel }: { readonly lan
           type="button"
           data-together-cancel=""
           onClick={onCancel}
-          className="rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="btn-press rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ minHeight: 44, color: 'var(--color-brand)', outlineColor: 'var(--color-brand)' }}
         >
           {translateCircles(language, 'together.cancel')}
@@ -152,6 +182,12 @@ export function TogetherHost({
   const clockOffsetMs = useStore(store, (state) => state.clockOffsetMs);
   const source = useSessionSource(session);
   const [notice, setNotice] = useState<string | null>(null);
+  const [joining, setJoining] = useState<string | null>(null);
+  const joiningRef = useRef<string | null>(null);
+  const [joinError, setJoinError] = useState<{ readonly sessionId: string; readonly text: string } | null>(null);
+  const shownSession = useLayerPresence(session);
+  const shownInvitation = useLayerPresence(session === null ? invitation : null);
+  const shownOutgoing = useLayerPresence(session === null && invitation === null ? outgoing : null);
 
   useEffect(() => {
     const wait = store.getState().msUntilInvitationExpiry();
@@ -178,43 +214,51 @@ export function TogetherHost({
     </p>
   );
 
-  if (session !== null) {
-    return (
-      <>
+  const join = (sessionId: string): void => {
+    if (joiningRef.current !== null) return;
+    joiningRef.current = sessionId;
+    setJoining(sessionId);
+    setJoinError(null);
+    void client.join(sessionId).then((outcome) => {
+      joiningRef.current = null;
+      setJoining(null);
+      if (outcome === 'gone') setNotice(translateCircles(language, 'together.gone'));
+      if (outcome === 'offline' || outcome === 'failed') setJoinError({ sessionId, text: translateCircles(language, JOIN_FAILURE[outcome]) });
+    });
+  };
+
+  const player = shownSession.value;
+  const invited = shownInvitation.value;
+  const waiting = shownOutgoing.value;
+  return (
+    <>
+      {player === null ? null : (
         <TogetherPlayerView
           language={language}
-          session={session}
-          partnerName={nameOf(language, session.partnerId)}
+          session={player}
+          partnerName={nameOf(language, player.partnerId)}
           source={source}
           clockOffsetMs={clockOffsetMs ?? 0}
           now={now}
+          leaving={shownSession.leaving}
           onSync={(state) => void client.sync(state)}
           onLeave={() => client.leave()}
         />
-        {announcement}
-      </>
-    );
-  }
-  if (invitation !== null) {
-    const join = (): void => {
-      void client.join(invitation.sessionId).then((outcome) => {
-        if (outcome === 'gone') setNotice(translateCircles(language, 'together.gone'));
-      });
-    };
-    return (
-      <>
-        <TogetherInvitationView language={language} invitation={invitation} name={nameOf(language, invitation.fromUserId)} onJoin={join} onDecline={() => client.decline(invitation.sessionId)} />
-        {announcement}
-      </>
-    );
-  }
-  if (outgoing !== null) {
-    return (
-      <>
-        <TogetherWaitingView language={language} name={nameOf(language, outgoing.toUserId)} onCancel={() => client.leave()} />
-        {announcement}
-      </>
-    );
-  }
-  return announcement;
+      )}
+      {invited === null ? null : (
+        <TogetherInvitationView
+          language={language}
+          invitation={invited}
+          name={nameOf(language, invited.fromUserId)}
+          joining={joining === invited.sessionId}
+          error={joinError?.sessionId === invited.sessionId ? joinError.text : null}
+          leaving={shownInvitation.leaving}
+          onJoin={() => join(invited.sessionId)}
+          onDecline={() => client.decline(invited.sessionId)}
+        />
+      )}
+      {waiting === null ? null : <TogetherWaitingView language={language} name={nameOf(language, waiting.toUserId)} leaving={shownOutgoing.leaving} onCancel={() => client.leave()} />}
+      {announcement}
+    </>
+  );
 }

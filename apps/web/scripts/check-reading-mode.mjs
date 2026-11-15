@@ -619,7 +619,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
-  expect((await page.locator('[role="menu"]').count()) === 0, 'Escape referme le menu');
+  /* Le menu refermé SORT en fondu (#18327) : sa copie en sortie, inerte, n'est plus un menu ouvert. */
+  expect((await page.locator('[role="menu"]:not([data-leaving])').count()) === 0, 'Escape referme le menu');
   expect(
     await page.evaluate(() => document.activeElement?.getAttribute('aria-haspopup') === 'menu'),
     'Escape rend le focus au chip',

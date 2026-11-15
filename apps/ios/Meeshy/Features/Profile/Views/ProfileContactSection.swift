@@ -40,7 +40,7 @@ struct ProfileContactSection: View {
             onOpenSecurity()
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                ProfileFieldIcon(name: icon, accentHex: accentHex)
+                ProfileFieldIcon(name: icon, accentColor: accentHex)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))

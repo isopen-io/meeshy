@@ -405,7 +405,8 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
 
 describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#7497)', () => {
   const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
-  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+  /* Les choix du menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en offre plus. */
+  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-menu]:not([data-leaving]) [data-publish-kind-choice="${kind}"]`);
 
   test('sans toucher au chevron, la story part comme indiqué — `type: STORY`, et la capsule le NOMME', async () => {
     const bench = harness({});
@@ -465,7 +466,8 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
   const choice = (visibility: string) => document.querySelector<HTMLButtonElement>(`[data-audience-choice="${visibility}"]`);
   const dialogOpen = () => document.querySelector('dialog[open]');
   const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
-  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+  /* Les choix du menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en offre plus. */
+  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-menu]:not([data-leaving]) [data-publish-kind-choice="${kind}"]`);
   /** La feuille se charge À LA DEMANDE (`lazy`, comme `LanguageSheet`) : son
    * premier rendu attend le module, le témoin attend la feuille OUVERTE. */
   async function openSheet(host: ParentNode): Promise<void> {

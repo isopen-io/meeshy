@@ -6,6 +6,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -239,6 +240,9 @@ describe('la section des conversations est REPLIABLE', () => {
     await mounter.click(host.querySelector('[data-collapsible-toggle="admin-conv"]') as HTMLElement | null);
 
     expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')?.getAttribute('aria-expanded')).toBe('false');
+    /* La liste sort en fondu (#18327), puis est démontée. */
+    await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    await mounter.settle();
     expect(host.querySelector('[data-admin-conversation="c-atelier"]')).toBe(null);
   });
 });

@@ -19,7 +19,7 @@ struct ProfileCirclesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "circle.circle.fill", title: Self.title, colorHex: MeeshyColors.brandPrimaryHex)
+            ProfileSectionHeader(icon: "circle.circle.fill", title: Self.title, color: MeeshyColors.brandPrimary)
             VStack(spacing: 0) {
                 pills
                 if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {

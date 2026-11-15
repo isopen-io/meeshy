@@ -61,7 +61,17 @@ afterEach(() => {
 
 const RECT = { x: 12, y: 340, left: 12, top: 340, width: 360, height: 420, right: 372, bottom: 760 };
 
-function Probe({ kind = 'bottom', onClose, children }: { readonly kind?: DialogGhostKind; readonly onClose?: () => void; readonly children?: ReactNode }) {
+function Probe({
+  kind = 'bottom',
+  onClose,
+  onCancel,
+  children,
+}: {
+  readonly kind?: DialogGhostKind;
+  readonly onClose?: () => void;
+  readonly onCancel?: (event: { preventDefault: () => void }) => void;
+  readonly children?: ReactNode;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const { leave } = useDialogExit(ref, { kind });
   useEffect(() => {
@@ -80,6 +90,7 @@ function Probe({ kind = 'bottom', onClose, children }: { readonly kind?: DialogG
       className="probe-sheet backdrop:bg-veil"
       style={{ color: 'red', '--probe-tint': 'blue' } as CSSProperties}
       onClose={onClose}
+      onCancel={onCancel}
     >
       <button type="button" id="quitter" autoFocus onClick={leave}>
         Quitter
@@ -184,6 +195,15 @@ describe('useDialogExit — Échap et démontage', () => {
     dialogOf(host).dispatchEvent(cancel);
     expect(cancel.defaultPrevented).toBe(false);
     expect(ghosts()).toHaveLength(1);
+  });
+
+  test('(c) un Échap que le dialogue REFUSE (`preventDefault`) ne crée aucun fantôme : le dialogue reste, seul (#18327)', async () => {
+    installPopover();
+    const host = await mounter.mount(<Probe onCancel={(event) => event.preventDefault()} />);
+    const cancel = new Event('cancel', { cancelable: true });
+    dialogOf(host).dispatchEvent(cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(ghosts()).toHaveLength(0);
   });
 
   test('(d) le démontage d’un dialogue ouvert crée le fantôme', async () => {
