@@ -453,6 +453,7 @@ export function RowActions({
     const actions = actionsOf?.();
     setVerdict(actions);
     setMode('panel');
+    setSubmenu(null);
     measure(itemsFor(actions).length);
     setOpen(true);
   };
@@ -466,6 +467,7 @@ export function RowActions({
     const actions = actionsOf?.();
     setVerdict(actions);
     setMode('peek');
+    setSubmenu(null);
     placeCluster(itemsFor(actions).length, origin);
     setOpen(true);
     detachSwallow.current?.();
