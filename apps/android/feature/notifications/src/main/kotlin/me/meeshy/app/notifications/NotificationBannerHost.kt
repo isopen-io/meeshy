@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -61,14 +62,13 @@ fun NotificationBannerHost(
 ) {
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val reduceMotion = LocalReduceMotion.current
-    var lift by remember { mutableFloatStateOf(0f) }
+    var lift by rememberBannerLift(banner)
     var previewedAt by remember { mutableStateOf<Long?>(null) }
 
     // Une notification qui parle de l'écran OUVERT se consomme en silence : le lecteur la voit
     // déjà arriver dans le fil, et la doubler d'une bannière serait dire deux fois la même
     // chose. C'est la route courante qui porte cette vérité, jamais le ViewModel — lui ne sait
     // pas ce qui est affiché.
-    LaunchedEffect(banner?.notificationId) { lift = 0f }
     LaunchedEffect(activeConversationId, activePostId) {
         viewModel.setActiveContext(activeConversationId, activePostId)
     }
@@ -88,7 +88,7 @@ fun NotificationBannerHost(
         modifier = modifier.fillMaxWidth().statusBarsPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        NotificationBannerTransition(banner = banner, reduceMotion = reduceMotion) { shown ->
+        NotificationBannerTransition(banner = banner, reduceMotion = reduceMotion) { shown, live ->
             MeeshyNotificationToast(
                 senderName = headlineText(shown.presentation.headline),
                 title = if (shown.previewHidden) {
@@ -99,20 +99,27 @@ fun NotificationBannerHost(
                 modifier = Modifier
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                     .graphicsLayer { translationY = lift }
-                    .bannerGestures(
-                        onLift = { lift = it },
-                        onDismiss = viewModel::dismiss,
-                        onPreview = {
-                            shown.conversationId?.let { id ->
-                                previewedAt = System.currentTimeMillis()
-                                viewModel.dismiss()
-                                onPreviewConversation(id)
-                            }
+                    .then(
+                        if (!live) {
+                            Modifier
+                        } else {
+                            Modifier.bannerGestures(
+                                onLift = { lift = it },
+                                onDismiss = viewModel::dismiss,
+                                onPreview = {
+                                    shown.conversationId?.let { id ->
+                                        previewedAt = System.currentTimeMillis()
+                                        viewModel.dismiss()
+                                        onPreviewConversation(id)
+                                    }
+                                },
+                            )
                         },
                     ),
                 avatarName = shown.avatarName,
                 avatarUrl = shown.avatarUrl,
-                onTap = {
+                onTap = onTap@{
+                    if (!live) return@onTap
                     val now = System.currentTimeMillis()
                     val suppressed = NotificationBannerSwipe.isTapSuppressed(now, previewedAt) ||
                         NotificationBannerSwipe.isTapSuppressed(now, lastModalPresentedAtMillis())
@@ -135,13 +142,14 @@ fun NotificationBannerHost(
 /**
  * La bannière entre en glissant du haut et ressort par le même chemin, sur le ressort `springBouncy` de l'iOS
  * (`RootSharedLayers`) pour le glissement comme pour le fondu ; sous « Réduire les animations », un fondu de 200 ms
- * (l'`easeOut` 0,2 s de l'iOS). Pendant la sortie, le contenu peint la DERNIÈRE bannière : celle qui s'en va.
+ * (l'`easeOut` 0,2 s de l'iOS). Pendant la sortie, le contenu peint la DERNIÈRE bannière : celle qui s'en va, avec
+ * `live = false` — elle n'est plus qu'une image, ni touchable ni glissable (une vue retirée d'iOS ne reçoit plus de toucher).
  */
 @Composable
 internal fun NotificationBannerTransition(
     banner: InAppBanner?,
     reduceMotion: Boolean,
-    content: @Composable (InAppBanner) -> Unit,
+    content: @Composable (shown: InAppBanner, live: Boolean) -> Unit,
 ) {
     val presence = rememberHeldPresence(banner)
     val shown = presence.value
@@ -158,8 +166,20 @@ internal fun NotificationBannerTransition(
             slideOutVertically(MeeshyMotion.springBouncy()) { -it } + fadeOut(MeeshyMotion.springBouncy())
         },
     ) {
-        if (shown != null) content(shown)
+        if (shown != null) content(shown, banner != null)
     }
+}
+
+/**
+ * Le décalage du doigt sur la bannière, remis à zéro quand une bannière ARRIVE — jamais quand elle part : une bannière
+ * glissée vers le haut ressort d'où le doigt l'a lâchée, au lieu de redescendre au repos avant de remonter.
+ */
+@Composable
+internal fun rememberBannerLift(banner: InAppBanner?): MutableFloatState {
+    val lift = remember { mutableFloatStateOf(0f) }
+    val arrived = banner?.notificationId
+    LaunchedEffect(arrived) { if (arrived != null) lift.floatValue = 0f }
+    return lift
 }
 
 private const val FADE_MILLIS = 200
