@@ -6,8 +6,10 @@ import {
   createPillAnnouncementStore,
   currentPillAnnouncement,
   nextPillAnnouncementWake,
+  pillAnnouncementStore,
   type PillAnnouncement,
 } from './sync-pill-announcements';
+import { pillAnnouncementArmed } from './sync-pill-gate';
 
 /**
  * LES ANNONCES DE LA PASTILLE (#14147) — elle fait DÉFILER ce qu'on lui confie, une annonce après l'autre, puis
@@ -64,5 +66,16 @@ describe('la file', () => {
 describe('le réveil', () => {
   test('la tête se retire après son temps de parole', () => {
     expect(nextPillAnnouncementWake({ shownAt: T0 })).toBe(T0 + ANNOUNCEMENT_DWELL_MS);
+  });
+});
+
+describe('le portillon de la première peinture', () => {
+  test('la file de l’application arme la pastille tant qu’une annonce attend, et la désarme vidée', () => {
+    pillAnnouncementStore.setState({ queue: [] });
+    expect(pillAnnouncementArmed.getState()).toBe(false);
+    pillAnnouncementStore.getState().announce(said());
+    expect(pillAnnouncementArmed.getState()).toBe(true);
+    pillAnnouncementStore.getState().retire('a1');
+    expect(pillAnnouncementArmed.getState()).toBe(false);
   });
 });

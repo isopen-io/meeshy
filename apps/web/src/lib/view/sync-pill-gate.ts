@@ -1,7 +1,7 @@
 import { useStore } from 'zustand/react';
+import { createStore } from 'zustand/vanilla';
 
 import { outboxStore } from '@/lib/send/outbox-store';
-import { pillAnnouncementStore } from '@/lib/view/sync-pill-announcements';
 import { useOnline } from '@/lib/net/online';
 
 /**
@@ -30,10 +30,16 @@ import { useOnline } from '@/lib/net/online';
  * peindre ; plus large, il charge au pire un module pour rien. L'asymétrie est
  * choisie dans le sens qui ne perd aucune annonce.
  */
+/**
+ * Y a-t-il une annonce à dire (#14147) ? Un SEUL booléen, tenu par la file des annonces
+ * (`sync-pill-announcements.ts`) : la file, ses délais et sa loi restent hors de la première peinture.
+ */
+export const pillAnnouncementArmed = createStore<boolean>(() => false);
+
 export function useSyncPillArmed(): boolean {
   const online = useOnline();
   const enFile = useStore(outboxStore, (s) => Object.keys(s.entries).length > 0);
   /* Une annonce confiée à la pastille (#14147) l'arme aussi : la batterie d'un Proche n'attend pas l'outbox. */
-  const annonce = useStore(pillAnnouncementStore, (s) => s.queue.length > 0);
+  const annonce = useStore(pillAnnouncementArmed);
   return !online || enFile || annonce;
 }

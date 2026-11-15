@@ -1,5 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+import { pillAnnouncementArmed } from '@/lib/view/sync-pill-gate';
+
 /**
  * **LES ANNONCES DE LA PASTILLE DE SYNCHRONISATION** (#14147) — la pastille ne dit plus seulement ce qui attend
  * dans l'outbox : elle fait DÉFILER les annonces qu'on lui confie (la batterie d'un Proche qui faiblit, d'un Sang
@@ -12,8 +14,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
  * - une annonce qui a attendu plus de {@link ANNOUNCEMENT_MAX_WAIT_MS} (la pastille disait un échec d'envoi, plus
  *   urgent) n'est jamais dite : elle surgirait, périmée.
  *
- * Module LÉGER à dessein : le portillon de la pastille (`sync-pill-gate.ts`, chunk d'ENTRÉE) le lit pour savoir
- * s'il y a quelque chose à dire.
+ * Le portillon de la pastille (`sync-pill-gate.ts`, chunk d'ENTRÉE) n'importe PAS ce module : la file de
+ * l'application lui tient un seul booléen, `pillAnnouncementArmed`, et la file reste hors de la première peinture.
  */
 
 export const ANNOUNCEMENT_DWELL_MS = 4_000;
@@ -51,6 +53,8 @@ export function createPillAnnouncementStore(): PillAnnouncementStoreApi {
 }
 
 export const pillAnnouncementStore: PillAnnouncementStoreApi = createPillAnnouncementStore();
+
+pillAnnouncementStore.subscribe((state) => pillAnnouncementArmed.setState(state.queue.length > 0, true));
 
 /** L'annonce à dire maintenant : la plus ancienne qui n'a pas trop attendu. */
 export function currentPillAnnouncement({ queue, now }: { readonly queue: readonly PillAnnouncement[]; readonly now: number }): PillAnnouncement | null {
