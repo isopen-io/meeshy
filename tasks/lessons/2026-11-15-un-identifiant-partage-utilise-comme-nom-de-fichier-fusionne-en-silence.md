@@ -1,4 +1,4 @@
-## Un identifiant d'espace de noms partagé utilisé comme NOM DE FICHIER transforme la collision en FUSION silencieuse (cycle 166, #18632)
+## Un identifiant d'espace de noms partagé utilisé comme NOM DE FICHIER transforme la collision en FUSION silencieuse (cycle 167, #18632)
 
 Le `CLAUDE.md` racine annonce la classe depuis #5102 : « les collisions d'espace
 de noms partagé (numéros de leçon, cliquets mesurés, registres générés) relèvent

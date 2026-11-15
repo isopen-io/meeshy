@@ -1,4 +1,4 @@
-# Cycle 166 — l'acquittement déclaré que personne ne rendait
+# Cycle 167 — l'acquittement déclaré que personne ne rendait
 
 *2026-11-15. Branche `claude/exciting-planck-6ub3i7`, repartie de la tête de
 `dev` (`134848579`).*
