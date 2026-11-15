@@ -63,6 +63,8 @@ export enum NotificationTypeEnum {
   RELATION_ACQUAINTANCE = 'relation_acquaintance',
   /** La batterie d'un Proche ou d'un Sang l'empêchera bientôt de répondre (#14147) : le palier est dans les métadonnées. */
   DEVICE_BATTERY = 'device_battery',
+  /** Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). */
+  DEVICE_UNREACHABLE = 'device_unreachable',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -661,6 +663,18 @@ export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetad
   readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
 }
 
+/**
+ * Metadata pour device_unreachable (#18737) — le téléphone d'un Proche ou d'un Sang.
+ * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seuls le genre et la cause probable se
+ * rangent ; l'heure du dernier signe de vie n'est que dans le corps. La ligne expire avec l'état.
+ */
+export interface DeviceUnreachableNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly reachabilityKind: 'unreachable' | 'reachable';
+  readonly cause?: 'battery' | 'network';
+}
+
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
 export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
 
@@ -742,6 +756,7 @@ export type NotificationMetadata =
   | ContactRecentlyActiveNotificationMetadata
   | RelationAcquaintanceNotificationMetadata
   | DeviceBatteryNotificationMetadata
+  | DeviceUnreachableNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

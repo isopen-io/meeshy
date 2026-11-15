@@ -202,6 +202,7 @@ import type {
   BatteryReport,
   BatteryReportAck,
 } from '../battery.js';
+import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
 import type { BloodProximityEventData } from '../blood-location.js';
 import type {
   SharedLocationAck,
@@ -398,6 +399,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
   [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
   [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
+  [SERVER_EVENTS.PHONE_UNREACHABLE]: (data: PhoneReachabilityChangedEventData) => void;
+  [SERVER_EVENTS.PHONE_REACHABLE]: (data: PhoneReachabilityClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;

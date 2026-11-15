@@ -833,6 +833,19 @@ export type {
   BatteryPersonSettings,
   BatteryPersonSettingsUpdate,
 } from './battery.js';
+export * from './phone-reachability-constants.js';
+export type {
+  PhoneReachabilityAnnouncement,
+  PhoneReachabilityState,
+  PhoneReachabilityChangedEventData,
+  PhoneReachabilityClearedEventData,
+  PhoneReachabilitySnapshot,
+  PhoneAliveAck,
+  PhoneReachabilityEmitterSettings,
+  PhoneReachabilityEmitterSettingsUpdate,
+  PhoneReachabilityPersonSettings,
+  PhoneReachabilityPersonSettingsUpdate,
+} from './phone-reachability.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';
 export type {
