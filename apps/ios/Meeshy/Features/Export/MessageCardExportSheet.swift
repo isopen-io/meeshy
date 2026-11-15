@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 import CoreText
 import MeeshySDK
 import MeeshyUI
@@ -88,6 +89,12 @@ struct MessageCardExportSheet: View {
     @State var headMediaID: String?
     @State var lead: MessageCardSubjectMedia?
     @State var leadSettled = false
+    /// Le fond choisi dans la photothèque (#18672) — propre à cet export, jamais enregistré.
+    @State var chosenBackdrop: MessageCardChosenBackdrop?
+    @State var backdropItem: PhotosPickerItem?
+    @State var backdropLoading = false
+    /// La vitesse de la vidéo qui fait défiler un message long (#18671).
+    @State var scrollSpeed: MessageCardScrollSpeed = .standard
 
     struct Rendered {
         let key: String
@@ -100,6 +107,9 @@ struct MessageCardExportSheet: View {
         var crowdedByMedia = false
         /// L'échelle la plus grande que la carte laisse aux médias — le pincement s'y arrête.
         var mediaScaleLimit = MessageCardScales.range.upperBound
+        /// La hauteur de la carte SANS PLAFOND et celle de son format (#18671).
+        var scrollContent: Double = 0
+        var viewport: Double = 0
     }
 
     private static let popularCount = 8
@@ -143,10 +153,33 @@ struct MessageCardExportSheet: View {
         painting(format).disposition.paintedMedia(of: currentMedia)
     }
 
+    /// Ce qui peut bouger : les médias peints, et la vidéo choisie en fond (#18672).
+    var movingMedia: [MessageCardMedia] {
+        guard let chosenBackdrop, chosenBackdrop.isVideo else { return paintedMedia }
+        return paintedMedia + [chosenBackdrop.media]
+    }
+
+    /// Les pixels de la carte : ceux des médias, et la première image du fond choisi.
+    var paintedPictures: MessageCardPictures {
+        loadedMedia.pictures.replacing(MessageCardBackdrop.mediaID, with: chosenBackdrop?.poster)
+    }
+
     /// Le plan d'une carte animée : la durée choisie, à partir du passage choisi (#8979).
     var motionPlan: MessageCardMotionPlan? {
-        MessageCardMotionPlan.of(output, media: paintedMedia, length: format.disposition.clipLength,
+        MessageCardMotionPlan.of(output, media: movingMedia, length: format.disposition.clipLength,
                                  quarter: clipQuarter, start: clipStart)
+    }
+
+    /// Le texte dépasse son format à sa taille naturelle : il peut défiler (#18671).
+    var textScrolls: Bool {
+        guard let rendered else { return false }
+        return rendered.scrollContent > rendered.viewport + 1
+    }
+
+    /// En vidéo, un message long DÉFILE — sauf un son, que sa propre animation montre.
+    var scrollPlan: MessageCardScrollPlan? {
+        guard output == .video, !paintedMedia.contains(where: { $0.kind == .audio }), let rendered else { return nil }
+        return MessageCardScrollPlan.of(contentHeight: rendered.scrollContent, viewportHeight: rendered.viewport, speed: scrollSpeed)
     }
 
     /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
@@ -164,7 +197,7 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)" }
+    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")" }
     var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
@@ -198,7 +231,9 @@ struct MessageCardExportSheet: View {
         .onDisappear {
             motionTask?.cancel()
             discardLead()
+            chosenBackdrop?.discard()
         }
+        .task(id: backdropItem) { await loadBackdrop() }
         // Une sortie que la carte n'offre plus (une seule photo choisie après « GIF ») retombe sur l'image (#9235).
         .adaptiveOnChange(of: offeredOutputs) { _, offered in
             if !offered.contains(output) { output = .image }
@@ -323,10 +358,12 @@ struct MessageCardExportSheet: View {
                 .foregroundStyle(MeeshyColors.error)
         } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failures(of: subject.media, output: output).count) {
             mediaFailure(failure)
-        } else if ready, let rendered, rendered.truncated {
+        } else if ready, let rendered, rendered.truncated, scrollPlan == nil {
             Text(rendered.crowdedByMedia
                  ? MessageCardExportText.text("export.card.truncated.media", "Les médias prennent la place : la fin du texte est coupée.")
-                 : MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
+                 : offeredOutputs.contains(.video) && textScrolls
+                    ? MessageCardExportText.text("export.card.truncated.scroll", "Message long : choisissez Vidéo pour le faire défiler en entier.")
+                    : MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -356,7 +393,22 @@ struct MessageCardExportSheet: View {
             onTab: openTab,
             onGallery: { galleryOpen = true },
             onExcerptStart: { clipStart = $0 },
-            contentPanel: contentPanel
+            contentPanel: contentPanel,
+            backdropPanel: backdropPanel
+        )
+    }
+
+    var backdropPanel: MessageCardBackdropPanel {
+        MessageCardBackdropPanel(
+            chosen: chosenBackdrop,
+            loading: backdropLoading,
+            item: $backdropItem,
+            onVeil: { chosenBackdrop?.veil = $0 },
+            onRemove: {
+                chosenBackdrop?.discard()
+                chosenBackdrop = nil
+                backdropItem = nil
+            }
         )
     }
 
@@ -391,7 +443,7 @@ struct MessageCardExportSheet: View {
     var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)"
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -401,13 +453,13 @@ struct MessageCardExportSheet: View {
                 styled.template = id
                 return input(for: styled)
             },
-            pictures: loadedMedia.pictures
+            pictures: paintedPictures
         )
     }
 
     /// La carte telle qu'elle partira — animée, sur l'extrait que la vidéo emportera (#8979).
     func input(for format: MessageCardFormat) -> MessageCardInput {
-        MessageCardInput.of(
+        var card = MessageCardInput.of(
             subject: subject,
             format: painting(format),
             handle: request.handle,
@@ -417,6 +469,8 @@ struct MessageCardExportSheet: View {
             formatTime: { Self.timeFormatter.string(from: $0) },
             media: currentMedia
         ).clipped(to: motionPlan?.clip)
+        card.backdrop = chosenBackdrop?.backdrop
+        return card
     }
 
     // MARK: - Chargement et peinture
@@ -489,6 +543,26 @@ struct MessageCardExportSheet: View {
         leadSettled = true
     }
 
+    /// Le fond choisi se charge hors du MainActor ; l'ancien fichier part quand le nouveau arrive.
+    private func loadBackdrop() async {
+        guard let item = backdropItem else { return }
+        backdropLoading = true
+        let veil = chosenBackdrop?.veil ?? MessageCardBackdrop.defaultVeil
+        let chosen = await Task.detached(priority: .userInitiated) { await MessageCardBackdropLoader.load(item, veil: veil) }.value
+        backdropLoading = false
+        guard !Task.isCancelled else {
+            chosen?.discard()
+            return
+        }
+        guard let chosen else {
+            notice = MessageCardExportText.text("export.card.backdrop.failed", "Impossible d’utiliser ce fond")
+            return
+        }
+        chosenBackdrop?.discard()
+        notice = nil
+        chosenBackdrop = chosen
+    }
+
     private func discardLead() {
         guard let file = lead.flatMap({ URL(string: $0.fileURL) }) else { return }
         Self.discard(file)
@@ -504,8 +578,10 @@ struct MessageCardExportSheet: View {
         let key = renderKey
         failed = false
         let input = input(for: format)
-        let pictures = loadedMedia.pictures
-        let card = await Task.detached(priority: .userInitiated) { MessageCardRenderer.render(input, pictures: pictures) }.value
+        let pictures = paintedPictures
+        let (card, tall) = await Task.detached(priority: .userInitiated) {
+            (MessageCardRenderer.render(input, pictures: pictures), MessageCardRenderer.scrollLayout(input))
+        }.value
         guard !Task.isCancelled, key == renderKey else { return }
         guard let card, let image = UIImage(data: card.png) else {
             failed = true
@@ -519,7 +595,9 @@ struct MessageCardExportSheet: View {
             size: CGSize(width: card.width, height: card.height),
             regions: card.regions,
             crowdedByMedia: card.crowdedByMedia,
-            mediaScaleLimit: card.mediaScaleLimit
+            mediaScaleLimit: card.mediaScaleLimit,
+            scrollContent: tall.height,
+            viewport: tall.viewportHeight ?? tall.height
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.

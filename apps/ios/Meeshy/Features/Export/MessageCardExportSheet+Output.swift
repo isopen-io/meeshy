@@ -10,7 +10,7 @@ extension MessageCardExportSheet {
     /// Les sorties que le contenu OFFRE : une vidéo s'anime en GIF comme en
     /// vidéo, un son en vidéo seulement, le reste en image fixe.
     var offeredOutputs: [MessageCardOutput] {
-        MessageCardOutput.offered(for: paintedMedia.map(\.kind))
+        MessageCardOutput.offered(for: paintedMedia.map(\.kind), backdrop: chosenBackdrop?.media.kind, scrolls: textScrolls)
     }
 
     /// Le choix se fait AVANT d'enregistrer ou de partager — il n'existe que
@@ -42,6 +42,10 @@ extension MessageCardExportSheet {
             .disabled(busy)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(MessageCardExportText.text("export.card.output.label", "Enregistrer en"))
+        }
+        if let plan = scrollPlan {
+            MessageCardScrollSpeedRow(speed: $scrollSpeed, duration: plan.duration)
+                .disabled(busy)
         }
     }
 
@@ -82,7 +86,7 @@ extension MessageCardExportSheet {
 
     /// La carte est peinte — et, pour une vidéo, sa voix est là : jamais une vidéo muette (revue #8979).
     var canSave: Bool {
-        ready && (output != .video || loadedMedia.hearsThePaintedSound(of: subject.media))
+        ready && (output != .video || scrollPlan != nil || loadedMedia.hearsThePaintedSound(of: subject.media))
     }
 
     enum Destination { case gallery, share }
@@ -117,6 +121,7 @@ extension MessageCardExportSheet {
     /// partage — sur la durée et le passage choisis, avec la piste que sert la
     /// langue d'export (#8979).
     private func animate(to destination: Destination) {
+        if scrollPlan != nil { return scroll(to: destination) }
         guard let plan = motionPlan, canSave else { return }
         busy = true
         notice = nil
@@ -126,6 +131,7 @@ extension MessageCardExportSheet {
         let audioFile = loadedMedia.soundFile(of: subject.media)
         let shownVideo = paintedMedia.first { $0.kind == .video }?.id
         let video = subject.media.first { $0.media.id == shownVideo }
+        let backdropVideo = chosenBackdrop?.videoFile
         let box = motion
         let progress: @Sendable (Double) -> Void = { value in
             Task { @MainActor in box.value = value }
@@ -133,17 +139,64 @@ extension MessageCardExportSheet {
         motionTask = Task {
             do {
                 var videoFile: URL?
+                var videoID = video?.media.id
                 if let video {
                     videoFile = await Task.detached(priority: .userInitiated) {
                         await MessageCardMediaLoader.localFile(video.fileURL, kind: .video)
                     }.value
+                } else if let backdropVideo {
+                    videoFile = backdropVideo
+                    videoID = MessageCardBackdrop.mediaID
                 }
-                let source = MessageCardMotionSource(videoFile: videoFile, videoID: video?.media.id, audioFile: audioFile)
+                let source = MessageCardMotionSource(videoFile: videoFile, videoID: videoID, audioFile: audioFile)
                 let file = try await Task.detached(priority: .userInitiated) {
                     try await MessageCardMotionExporter.export(input: input, pictures: pictures, plan: plan, source: source, progress: progress)
                 }.value
                 try Task.checkCancellation()
                 await deliver(file, output: plan.output, to: destination)
+            } catch is CancellationError {
+                busy = false
+                motion.value = nil
+            } catch {
+                busy = false
+                motion.value = nil
+                finish(.failed)
+            }
+        }
+    }
+
+    /// Un message long DÉFILE sous son format (#18671) — les vidéos du message
+    /// et le fond choisi bouclent dessous.
+    private func scroll(to destination: Destination) {
+        guard canSave else { return }
+        busy = true
+        notice = nil
+        motion.value = 0
+        let input = input(for: format)
+        let pictures = paintedPictures
+        let speed = scrollSpeed
+        let shownVideos = Set(paintedMedia.filter { $0.kind == .video }.map(\.id))
+        let attached = subject.media.filter { shownVideos.contains($0.media.id) }
+        let backdrop = chosenBackdrop?.videoFile.map { MessageCardScrollVideo(id: MessageCardBackdrop.mediaID, file: $0) }
+        let box = motion
+        let progress: @Sendable (Double) -> Void = { value in
+            Task { @MainActor in box.value = value }
+        }
+        motionTask = Task {
+            do {
+                var videos = backdrop.map { [$0] } ?? []
+                for item in attached {
+                    let file = await Task.detached(priority: .userInitiated) {
+                        await MessageCardMediaLoader.localFile(item.fileURL, kind: .video)
+                    }.value
+                    if let file { videos.append(MessageCardScrollVideo(id: item.media.id, file: file)) }
+                }
+                let ready = videos
+                let file = try await Task.detached(priority: .userInitiated) {
+                    try await MessageCardScrollExporter.export(input: input, pictures: pictures, speed: speed, videos: ready, progress: progress)
+                }.value
+                try Task.checkCancellation()
+                await deliver(file, output: .video, to: destination)
             } catch is CancellationError {
                 busy = false
                 motion.value = nil

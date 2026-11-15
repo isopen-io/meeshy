@@ -187,7 +187,7 @@ nonisolated enum MessageCardMotionExporter {
         return url
     }
 
-    private static func pixelBuffer(from image: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
+    static func pixelBuffer(from image: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
         var buffer: CVPixelBuffer?
         let attributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
