@@ -1158,3 +1158,38 @@ socket jusqu'au client.
 3. #17133 et #18611, puis #18600 à découper par répertoire, puis #18630.
 4. #18371, #18154 et #18497.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 35 — 2026-11-15
+
+- **Base** : `origin/dev` @ `cfaea72f`. Le lot du cycle 34 (#18628, PR #18669) a été fusionné en ouverture de ce cycle (`f02e978b`), toutes les vérifications de fond étant vertes.
+- **Branche** : `claude/determined-volta-3frqmx`.
+- **Objectif** : #18667. Un profil vocal reçu par ZMQ ne s'écrit que sous le répertoire temporaire du traducteur, quel que soit son `user_id`.
+- **Livré** (seul `voice_profile_handler.py` change, de 761 à 824 lignes ; ni le protocole ZMQ, ni la passerelle, ni les champs de réponse) :
+  - **`user_id`** : à l'entrée de `handle_analyze` et de `handle_verify`, seule une `str` qui vérifie `fullmatch(r'[0-9a-fA-F]{24}')` (un ObjectId) est acceptée. Le refus intervient avant tout décodage ou écriture : `success: False`, `error: 'Invalid user_id'`, `user_id: ''`, et rien dans les logs. La passerelle envoie toujours `auth.registeredUser.id`.
+  - **Nom de fichier** : `profile_<uuid4>.<ext>` et `verify_<uuid4>.<ext>`. Aucune donnée de la requête n'y entre.
+  - **Extension** : elle est tirée d'une liste fermée, `ACCEPTED_AUDIO_FORMATS`, en minuscules. La liste reprend les formats de la passerelle (`wav, mp3, ogg, webm, m4a, flac`) et leurs alias MIME. Hors de la liste, la réponse est `'Unsupported audio format'`, sans écriture.
+  - **Garde** : le chemin résolu doit avoir pour parent `temp_dir` résolu. C'est une défense en profondeur.
+- **Tests** : `tests/test_voice_profile_handler_temp_path.py` (104 cas sur les deux sites, dont 24 ajoutés par la QA). Dans `test_15_voice_profile_handler.py`, 10 `user_123` passent à un ObjectId.
+  - **Rouge** : `24 failed, 34 passed`, puis `18 failed, 62 passed` pour la validation de l'ObjectId. La QA mesure `43 failed, 37 passed` sur le fichier final avec la base `cfaea72f`.
+  - **Vert** : je l'ai relancé, `139 passed` (temp_path, test_15, exception_logging).
+  - **Suites voisines** : `test_20` et `test_31` ont les mêmes 3 échecs connus avant et après (`test_audio_process_missing_fields`, deux `test_tts_result_*`).
+  - **Mutations QA** : 17 essayées. 15 sont tuées, dont les 2 qui survivaient (retrait des `isinstance`), que des témoins ajoutés tuent désormais. Une est équivalente.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 → #18697. La passerelle envoie `voice_profile_analyze`, que le routeur ZMQ ne route pas : le flux du profil vocal ne fonctionne probablement pas. Le défaut est donc latent. Le jour où le routage sera réparé, cette garde deviendra la seule barrière tant que #18629 n'est pas livrée.
+  - R2 : déjà #18691. Les méthodes de `VoiceCloneService` appelées par le handler n'existent plus.
+  - R3, non suivie : la liste admet `caf`, `amr`, `3gp`, `aac`, `opus`, `mp4`, qu'aucun client ne produit. ffmpeg sonde le contenu de toute façon. À réduire si on touche de nouveau la liste.
+- **Ouvert pendant le cycle** :
+  - #18691 : le chemin mort de `VoiceCloneService`.
+  - #18692 : les messages d'exception bruts de ce handler.
+  - #18694 : le format multipart `blob` côté passerelle.
+  - #18695 : `voice_cache_dir / user_id` atteint par le pipeline audio ZMQ (`sender_id`), `voice_api` (`get_user_id`) et `audio_api`. C'est le plus grave.
+  - #18697 : le routage de `voice_profile_analyze`.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18695, avec l'agent `auditeur-adversarial` : l'écriture dans le cache de modèles vocaux reste ouverte par trois flux, dont le pipeline audio ZMQ.
+2. #18666 (SSRF par `audioUrl`), puis #18668 et #18692.
+3. #18697, puis #18691. Avant d'écrire, mesurer sur le staging si le flux du profil vocal répond.
+4. #18629, avec l'agent `sre-infra`, puis #17133 et #18611, puis #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

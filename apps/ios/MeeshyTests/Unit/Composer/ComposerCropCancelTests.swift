@@ -3,10 +3,11 @@ import UIKit
 import MeeshyUI
 @testable import Meeshy
 
-/// **Le recadrage n'a plus de bouton « Annuler »** (#18639, porteur 2026-11-15) :
+/// **Fermer le recadrage garde le format ; « Annuler » le rend** (#18639, #18654) :
 /// chaque format et chaque crochet s'appliquent à l'instant, retoucher
-/// « Recadrer » ou ouvrir un autre outil referme le recadrage, et les formats
-/// portent la puce de tri de la bande. La prise entière dépasse du cadre,
+/// « Recadrer » ou ouvrir un autre outil referme le recadrage en gardant le format, et les
+/// formats portent la puce de tri de la bande, sans bouton à côté d'eux. « Annuler » vit à la
+/// place de « Terminé », dans la rangée haute. La prise entière dépasse du cadre,
 /// voilée, et seul le cadre part (#15355).
 @MainActor
 final class ComposerCropCancelTests: XCTestCase {
@@ -50,15 +51,16 @@ final class ComposerCropCancelTests: XCTestCase {
         XCTAssertEqual(ComposerCropFlow.preset(of: session), .square)
     }
 
-    // MARK: - Les formats en puces, sans « Annuler »
+    // MARK: - Les formats en puces, « Annuler » à la place de « Terminé »
 
-    func test_formats_wearTheBandSortingChip_withoutCancel() throws {
+    func test_formats_wearTheBandSortingChip_andCancelSitsWhereDoneWas() throws {
         let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCropBrackets.swift")
         XCTAssertTrue(barre.contains("CallFrameMoodChip(title: preset.label, isSelected: selected == preset)"),
                       "la puce des pilules Élégant · Jovial · Corporate")
-        XCTAssertFalse(barre.contains("ComposerCropCancelButton"))
+        XCTAssertFalse(barre.contains("ComposerCropCancelButton"), "aucun « Annuler » à côté des formats")
         let vues = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
-        XCTAssertFalse(vues.contains("ComposerCropCancelButton"), "plus d'« Annuler » à côté des formats")
+        XCTAssertTrue(vues.contains(".overlay(alignment: .topTrailing) { ComposerCropCancelButton(session: session) }"),
+                      "« Annuler » prend la place de « Terminé », sur la rangée haute (#18654)")
         XCTAssertTrue(vues.contains("ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session))"))
     }
 

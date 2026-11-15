@@ -286,7 +286,7 @@ async def test_analyze_missing_audio_data(handler):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_format': 'wav'
     }
 
@@ -306,7 +306,7 @@ async def test_analyze_invalid_base64(handler):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': 'not_valid_base64!!!',
         'audio_format': 'wav'
     }
@@ -330,7 +330,7 @@ async def test_analyze_audio_too_short(handler, sample_audio_base64):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': sample_audio_base64,
         'audio_format': 'wav'
     }
@@ -357,7 +357,7 @@ async def test_analyze_no_voice_clone_service():
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': 'base64data',
         'audio_format': 'wav'
     }
@@ -403,7 +403,7 @@ async def test_verify_missing_fingerprint(handler):
     request = {
         'type': 'voice_profile_verify',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': 'base64data',
         'audio_format': 'wav'
     }
@@ -471,7 +471,7 @@ async def test_analyze_success_flow(handler, sample_audio_base64):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': sample_audio_base64,
         'audio_format': 'wav'
     }
@@ -498,7 +498,7 @@ async def test_request_routing(handler):
         request = {
             'type': 'voice_profile_analyze',
             'request_id': 'req_123',
-            'user_id': 'user_123'
+            'user_id': '65a1f0c2b3d4e5f6a7b8c9d0'
         }
 
         await handler.handle_request(request)
@@ -510,7 +510,7 @@ async def test_request_routing(handler):
         request = {
             'type': 'voice_profile_verify',
             'request_id': 'req_124',
-            'user_id': 'user_123'
+            'user_id': '65a1f0c2b3d4e5f6a7b8c9d0'
         }
 
         await handler.handle_request(request)
@@ -546,7 +546,7 @@ async def test_analyze_exception_handling(handler, sample_audio_base64):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': sample_audio_base64,
         'audio_format': 'wav'
     }
@@ -569,7 +569,7 @@ async def test_temp_file_cleanup(handler, sample_audio_base64):
     request = {
         'type': 'voice_profile_analyze',
         'request_id': 'req_123',
-        'user_id': 'user_123',
+        'user_id': '65a1f0c2b3d4e5f6a7b8c9d0',
         'audio_data': sample_audio_base64,
         'audio_format': 'wav'
     }

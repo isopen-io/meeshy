@@ -205,7 +205,7 @@ describe('l’onglet « Cercles », câblé', () => {
     );
     const realMatchMedia = window.matchMedia;
     const proto = HTMLElement.prototype;
-    const realAnimate = proto.animate;
+    const ownAnimate = Object.getOwnPropertyDescriptor(proto, 'animate');
     window.matchMedia = ((query: string) => ({
       matches: query.includes('no-preference'),
       media: query,
@@ -227,7 +227,8 @@ describe('l’onglet « Cercles », câblé', () => {
       expect(host.querySelector('[data-circle-requests-section]')?.textContent).toContain('Bob');
     } finally {
       window.matchMedia = realMatchMedia;
-      proto.animate = realAnimate;
+      if (ownAnimate === undefined) Reflect.deleteProperty(proto, 'animate');
+      else Object.defineProperty(proto, 'animate', ownAnimate);
     }
   });
 
