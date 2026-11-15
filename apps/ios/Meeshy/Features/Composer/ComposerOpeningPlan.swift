@@ -24,12 +24,13 @@ nonisolated struct ComposerOpeningPreferences: Equatable, Sendable {
 }
 
 /// **L'ouverture d'un composer vierge : la caméra armée derrière, la photothèque
-/// à mi-hauteur devant** (#17269). On ne touche plus la scène pour armer : la
+/// devant** (#17269, dépliée en entier depuis #18709). On ne touche plus la scène pour armer : la
 /// caméra l'est déjà, et l'appui long sur la scène filme.
 nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
-    /// **Comment la photothèque d'ouverture se présente** : à mi-hauteur, la
-    /// caméra visible derrière, dès que le système sait le faire (iOS 17, le
-    /// sélecteur en ligne) ; avant, en plein écran.
+    /// **Quelle photothèque s'ouvre** : celle du composer (`ComposerOpeningLibrarySheet`,
+    /// qui se retire quand le doigt tient pour filmer) dès iOS 17, le sélecteur des portails
+    /// avant. Les deux se montrent dépliées en entier depuis #18709 ; le nom du cas garde
+    /// la valeur de #17269.
     nonisolated enum Library: Equatable, Sendable {
         case halfHeight
         case fullScreen
