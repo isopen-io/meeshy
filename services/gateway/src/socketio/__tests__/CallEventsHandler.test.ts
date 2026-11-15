@@ -1274,14 +1274,7 @@ describe('CallEventsHandler', () => {
       const offerSignal = { callId: CALL_ID, signal: { type: 'offer', from: USER_ID, to: 'target-user-id' } };
       await socket._trigger('call:signal', offerSignal, ack);
 
-      // #18632 — le refus porte désormais son CODE dans l'acquittement, et
-      // c'est tout l'objet du lot : un `{ success: false }` nu laisse
-      // l'appelant qui attend sans de quoi distinguer « le pair n'est pas
-      // encore là » (transitoire, à rejouer) d'un refus définitif.
-      expect(ack).toHaveBeenCalledWith({
-        success: false,
-        error: { code: 'TARGET_NOT_FOUND', message: 'Target participant has no active connection' },
-      });
+      expect(ack).toHaveBeenCalledWith({ success: false, error: { code: 'TARGET_NOT_FOUND', message: 'Target participant has no active connection' } });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'TARGET_NOT_FOUND' }));
     });
 
