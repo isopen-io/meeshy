@@ -745,6 +745,12 @@ final class FakeSharedLocationRosterStore: SharedLocationRosterStoring {
     func load() -> SharedLocationRoster? { kept }
 
     func save(_ roster: SharedLocationRoster) { kept = roster.isEmpty ? nil : roster }
+
+    var received = false
+
+    func loadReceived() -> Bool { received }
+
+    func saveReceived(_ received: Bool) { self.received = received }
 }
 
 @MainActor
