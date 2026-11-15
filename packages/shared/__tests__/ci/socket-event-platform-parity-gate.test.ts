@@ -103,6 +103,13 @@ const ASYMETRIES: readonly {
     events: ['bring:ring', 'now-playing:changed', 'now-playing:cleared'],
   },
   {
+    absents: ['android'],
+    raison:
+      "l'identité d'une communauté à jour chez ses membres : le web (#18435) et iOS (#18682) l'appliquent, "
+      + 'le miroir Kotlin est le reste de #18439.',
+    events: ['community:updated'],
+  },
+  {
     absents: ['android', 'ios'],
     raison:
       'surfaces que le WEB SEUL porte aujourd\'hui : la console d\'administration (métriques d\'hôte), '
@@ -111,7 +118,6 @@ const ASYMETRIES: readonly {
       + 'notification) ; la parité par socket est une question produit, pas une dette mesurée.',
     events: [
       'admin-metrics:sample',
-      'community:updated',
       'error',
       'friend-request:accepted',
       'friend-request:new',
