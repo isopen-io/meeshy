@@ -281,6 +281,10 @@
     <string name="identity_role_admin">مشرف</string>
     <string name="identity_role_creator">المنشئ</string>
     <string name="identity_role_moderator">مُنظّم</string>
+    <string name="kit_anchored_sheet_close">إغلاق</string>
+    <string name="kit_anchored_sheet_height">ارتفاع اللوحة</string>
+    <string name="kit_anchored_sheet_height_expanded">موسّعة</string>
+    <string name="kit_anchored_sheet_height_reduced">مصغّرة</string>
     <string name="language_strip_more">لغات أخرى</string>
     <string name="lentille_mode_menu_selected">محدد</string>
     <string name="live_location_duration_title">مدة المشاركة</string>

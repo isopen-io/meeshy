@@ -7,6 +7,11 @@ struct SecurityView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var authManager: AuthManager
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     @State private var showChangePassword = false
     @State private var pinFocused = false
@@ -150,8 +155,9 @@ struct SecurityView: View {
     private func focusMasterPinIfRequested(_ proxy: ScrollViewProxy) {
         guard SettingsFocusRequest.shared.consume(.masterPin) else { return }
         pinFocused = true
+        let reduce = reduceMotion
         Task { await DelayedUI.perform(after: .milliseconds(350)) {
-            withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
+            meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
         } }
     }
 

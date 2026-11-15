@@ -3,8 +3,8 @@ import XCTest
 
 /// Sortie de bêta (directive porteur du 2026-09-14, #6482) — « Activer la liste
 /// Lentille », « Activer le mode de lecture » et « Activer le mode Rivière »
-/// vivent dans la section Apparence des Réglages, sous « Langue de
-/// l'interface ». La section « Bêta » et sa préférence ont disparu.
+/// vivent dans les Réglages, en annexe « Fonctions de l'interface » depuis les
+/// deux strates (#18589). La section « Bêta » et sa préférence ont disparu.
 ///
 /// Preuves par lecture de source : `SettingsView` ne se construit pas hors
 /// d'un environnement complet (Router, AuthManager). Le comportement des
@@ -66,20 +66,22 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Les trois interrupteurs, sous « Langue de l'interface »
+    // MARK: - Les trois interrupteurs, en annexe « Fonctions de l'interface » (#18589)
 
-    func test_featureToggles_areMountedInTheAppearanceSection_underTheInterfaceLanguageRow() throws {
+    /// Les réglages en deux strates (#18589) les rangent sous le pli « Annexes » :
+    /// on les règle une fois. La loi dit leur bloc et leur ordre ; l'écran rend
+    /// chacune par sa propre rangée, sans compilation conditionnelle.
+    @MainActor
+    func test_featureToggles_liveInTheInterfaceFeaturesAnnex_inTheirOrder() throws {
+        let block = try XCTUnwrap(SettingsLayout.block(containing: .lentilleList))
+        XCTAssertEqual(block.id, .interfaceFeatures)
+        XCTAssertEqual(block.stratum, .annex)
+        XCTAssertEqual(block.destinations, [.lentilleList, .readingModes, .riviereMode])
         let settings = try settingsCode()
-        let start = try XCTUnwrap(settings.range(of: "private var appearanceSection: some View {"), "appearanceSection introuvable.")
-        let end = try XCTUnwrap(
-            settings.range(of: "private func themeLabel(", range: start.upperBound..<settings.endIndex),
-            "La fin de appearanceSection (themeLabel) est introuvable."
-        )
-        let body = settings[start.upperBound..<end.lowerBound]
-        let language = try XCTUnwrap(body.range(of: "interfaceLanguageRow"), "La rangée « Langue de l'interface » a quitté la section Apparence.")
-        let toggles = try XCTUnwrap(body.range(of: "interfaceFeatureRows"), "Les trois interrupteurs ne sont pas montés dans la section Apparence.")
-        XCTAssertLessThan(language.lowerBound, toggles.lowerBound, "Les interrupteurs se placent SOUS la rangée de langue.")
-        XCTAssertFalse(body.contains("#if"), "Aucune compilation conditionnelle : les réglages sont publics.")
+        for row in ["case .lentilleList: lentilleListRow", "case .readingModes: readingModesRow", "case .riviereMode: riviereModeRow"] {
+            XCTAssertTrue(settings.contains(row), "La rangée « \(row) » n'est plus rendue par l'écran.")
+        }
+        XCTAssertFalse(settings.contains("#if"), "Aucune compilation conditionnelle : les réglages sont publics.")
     }
 
     func test_eachToggleMirrorsItsFlag_andWritesThroughSetEnabled() throws {

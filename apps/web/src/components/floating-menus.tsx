@@ -401,7 +401,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
                 onClick={() => setOpen(false)}
                 data-leaving={roving.leaving ? '' : undefined}
                 aria-label={rungLabel(langue, destination, counts, attention)}
-                className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="btn-press floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
                     '--rung': index,
