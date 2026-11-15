@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
           to="signup"
           onClick={() => welcomeStore.markCompleted()}
           aria-describedby="welcome-create-account-hint"
-          className="grid place-items-center rounded-field font-bold text-ios-on-brand"
+          className="btn-press grid place-items-center rounded-field font-bold text-ios-on-brand"
           style={{ minHeight: 52, background: CREATE_ACCOUNT_GRADIENT }}
         >
           Créer un compte
@@ -48,7 +48,7 @@ export default function WelcomeScreen() {
           to="login"
           onClick={() => welcomeStore.markCompleted()}
           aria-describedby="welcome-sign-in-hint"
-          className="grid place-items-center rounded-field font-semibold"
+          className="btn-press grid place-items-center rounded-field font-semibold"
           style={{
             minHeight: 52,
             border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
